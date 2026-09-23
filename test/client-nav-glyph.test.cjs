@@ -6,10 +6,17 @@
 // nav-cell <svg> at runtime. This test drives that path with a minimal DOM stub:
 // no jsdom, no browser.
 const path = require('path')
-const fs = require('path')
+const fs = require('fs')
 
-const profileModules = '/vol1/@appdata/deepseek.harness/dsh-data/profiles/web/node_modules'
-const React = require(path.join(profileModules, 'react'))
+const WORKSPACE = '/vol1/1000/Deepseek-Harness/工作台/插件'
+const REACT_CANDIDATES = [
+  '/vol1/@appdata/deepseek.harness/dsh-data/profiles/web/node_modules',
+  path.join(WORKSPACE, 'dsh-session-compactor/node_modules'),
+  path.join(WORKSPACE, 'dsh-interactive-reader/node_modules'),
+]
+const reactModules = REACT_CANDIDATES.find((dir) => fs.existsSync(path.join(dir, 'react', 'package.json')))
+if (!reactModules) throw new Error('no react found in any candidate directory')
+const React = require(path.join(reactModules, 'react'))
 const clientPath = path.resolve(__dirname, '../lib/client.js')
 const src = require('fs').readFileSync(clientPath, 'utf8')
 

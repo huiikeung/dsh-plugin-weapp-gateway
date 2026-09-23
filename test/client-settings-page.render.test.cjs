@@ -10,9 +10,21 @@
 const path = require('path')
 const fs = require('fs')
 
-const profileModules = '/vol1/@appdata/deepseek.harness/dsh-data/profiles/web/node_modules'
-const React = require(path.join(profileModules, 'react'))
-const { renderToStaticMarkup } = require(path.join(profileModules, 'react-dom/server'))
+// The profile's node_modules/react is a dangling symlink into
+// .dsh-module-fallback (which ships no react), so resolve the pair from the
+// first place that actually has it. The browser gets React from the host module
+// graph; this is only for server-rendering the tree under Node.
+const WORKSPACE = '/vol1/1000/Deepseek-Harness/工作台/插件'
+const REACT_CANDIDATES = [
+  '/vol1/@appdata/deepseek.harness/dsh-data/profiles/web/node_modules',
+  path.join(WORKSPACE, 'dsh-session-compactor/node_modules'),
+  path.join(WORKSPACE, 'dsh-interactive-reader/node_modules'),
+]
+const reactModules = REACT_CANDIDATES.find((dir) => fs.existsSync(path.join(dir, 'react', 'package.json'))
+  && fs.existsSync(path.join(dir, 'react-dom', 'server.js')))
+if (!reactModules) throw new Error('no react + react-dom/server found in any candidate directory')
+const React = require(path.join(reactModules, 'react'))
+const { renderToStaticMarkup } = require(path.join(reactModules, 'react-dom/server'))
 const clientPath = path.resolve(__dirname, '../lib/client.js')
 const src = fs.readFileSync(clientPath, 'utf8')
 
@@ -95,6 +107,7 @@ for (const [needle, what] of [
   ['设备鉴权', 'auth row'],
   ['WebSocket 地址', 'ws url field'],
   ['可信设备', 'trusted devices group'],
+  ['WebSocket 地址（二维码指向这里）', 'direct mode labels the ws field as the QR target'],
 ]) check(htmlA.includes(needle), what)
 
 // ---------------------------------------------------------- render B: populated
@@ -104,6 +117,13 @@ const seeds = [
   {                                                                                          // status
     gatewayEnabled: true, gatewayMode: 'persistent', gatewayId: '9f1c-uuid', gatewayName: '家里电脑',
     requireAuth: true, version: '0.7.6', webPort: 2298, wsPath: '/ws/mobile', publicUrl: '',
+    pairingMode: 'relay',
+    relay: {
+      relay: 'wss://relay.ahwe.top', nodeId: 'ecb2de50-7542-490b-af4f-aebfcb29c3c2',
+      agentPubKey: 'nU2yVdMWY2fePU9MHkkD6PQJ3V+FkyItgDfWjVy95Go=', gatewayName: 'MEmini-NAS',
+      updatedAt: 1758000000000,
+    },
+    endpoints: ['ws://192.168.3.110:3081/ws/mobile'],
     lan: { enabled: true, listening: true, urls: ['ws://192.168.3.110:3081/ws/mobile'], port: 3081 },
   },
   'ws://192.168.3.110:3081/ws/mobile',                                                       // publicUrl
@@ -148,7 +168,51 @@ for (const [needle, what] of [
   ['已刷新 · 10:00:00', 'refresh notice'],
   ['v0.7.6', 'version footer'],
   ['完成', 'close button'],
+  ['连接模式', 'connection-mode group'],
+  ['直连', 'direct option offered'],
+  ['中继', 'relay option offered'],
+  ['mgw-seg-btn selected', 'a mode is selected'],
+  ['wss://relay.ahwe.top', 'registered relay shown'],
+  ['ecb2de50-7542-490b-af4f-aebfcb29c3c2', 'relay nodeId shown'],
+  ['agentPubKey nU2yVdMWY2…fWjVy95Go=', 'public key shown as a fingerprint'],
+  ['已注册的中继', 'relay registration hint'],
+  ['连接地址（二维码指向这里）', 'relay mode leads the address group with the relay'],
+  ['wss://relay.ahwe.top', 'relay address shown as the connection address'],
+  ['网关地址（仅透传给小程序）', 'relay mode demotes the ws field to informational'],
+  ['中继模式下小程序不直连它', 'explains the demotion'],
+  ['公网接入（中继模式下只影响上面透传的网关地址）', 'public-access label explains its reduced scope'],
 ]) check(htmlB.includes(needle), what)
+check(!htmlB.includes('nU2yVdMWY2fePU9MHkkD6PQJ3V+FkyItgDfWjVy95Go='), 'full public key is not dumped into the page')
+
+// ---------------------------------------------------- render C: populated, direct
+// The operator's everyday state: a live gateway in direct mode. Covers the other
+// side of every mode-conditional in the 连接地址 group.
+console.log('\n=== render C: populated, direct mode ===')
+// JSON round-trip drops the `() => new Set()` seed for the revoking-ids state,
+// so restore it explicitly.
+const directSeeds = JSON.parse(JSON.stringify(seeds))
+directSeeds[1].pairingMode = 'direct'
+directSeeds[1].relay = null
+directSeeds[15] = () => new Set()
+const directRegistrations = []
+const directExported = loadBundle(seededReact(directSeeds)).factory((id) => {
+  if (id === 'react') return seededReact(directSeeds)
+  throw new Error(`unexpected require: ${id}`)
+})
+directRegistrations.length = 0
+directExported.apply({ slots: { inject: (n, t) => t(), register: (o, c) => { directRegistrations.push({ options: o, component: c }); return () => {} } } })
+const htmlC = renderToStaticMarkup(React.createElement(directRegistrations[0].component, { close: () => {} }))
+for (const [needle, what] of [
+  ['连接模式', 'connection-mode group present in direct mode'],
+  ['mgw-seg-btn selected', 'a mode is selected'],
+  ['WebSocket 地址（二维码指向这里）', 'direct mode labels the ws field as the QR target'],
+  ['公网接入', 'direct-mode public-access label is plain (no relay caveat)'],
+  ['ws://192.168.3.110:3081/ws/mobile', 'gateway address shown'],
+]) check(htmlC.includes(needle), what)
+// negative checks: the relay details must not leak into direct mode
+for (const needle of ['wss://relay.ahwe.top', 'nodeId ecb2de50', 'agentPubKey nU2yVdMWY2']) {
+  check(!htmlC.includes(needle), `direct mode hides ${needle}`)
+}
 
 // ------------------------------------------------------- source-level guarantees
 console.log('\n=== source guarantees ===')
