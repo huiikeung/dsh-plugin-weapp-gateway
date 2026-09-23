@@ -1,0 +1,68 @@
+# ---------------------------------------------------------------------------
+# 反代示例：把外部域名的 /ws/mobile 转给插件，供手机在外网连接
+#
+# ✅ 本机实际配置（已实测生效，2026-09-11）：
+#      前端：https://mdsh.zo1.top:16662   （Lucky，证书 *.zo1.top / Let's Encrypt）
+#      后端：http://192.168.3.110:3081    （插件局域网入口；Lucky 从本机 LAN IP 发起，
+#                                          属私网来源，能通过插件的私网校验）
+#      实测：从外部域名请求 /ws/mobile 与 / 都被转发到 3081 并被探针收到。
+#      对应插件侧：/etc/dsh-mobile-gateway/public-url = wss://mdsh.zo1.top:16662/ws/mobile
+#
+# 后端二选一（两台都行，都不需要开放 DSH WebUI 本身）：
+#   http://127.0.0.1:3081  ← 插件专用「只收 WS 的局域网监听口」：推荐
+#                            它只接受私网来源，nginx/lucky 从内网 IP 发起即放行；
+#                            且只放行 /ws/mobile 一个路径，其它路径一律 404
+#   http://127.0.0.1:2298  ← DSH web 自身的 /ws/mobile 路由
+#
+# ⚠️ 不要代理 DSH 的 / 或 /mgw：管理接口 /mgw 默认 adminLoopbackOnly，
+#    且把整个 WebUI 暴露到公网会显著放大风险。
+# ---------------------------------------------------------------------------
+
+# ===== 方案 A：FnOS 自带 nginx（/usr/trim/nginx/conf/conf.d/）=====
+# 说明：FnOS 的 nginx 主配置用 ssl_certificate $ssl_server_name 动态取证书，
+#       这里只补一个 location。升级 FnOS 前请备份此文件。
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name d.example.com;            # ← 换成你自己的域名（必须有可信证书）
+
+    location = /ws/mobile {
+        if ($args != "") { return 404; }  # 插件默认不允许 query token
+
+        proxy_pass http://127.0.0.1:3081;
+        proxy_http_version 1.1;
+
+        # WebSocket 升级三件套，缺一不可
+        proxy_set_header Upgrade    $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host       127.0.0.1:3081;
+
+        proxy_set_header X-Real-IP  $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+
+        # 长连接：手机侧是常驻 WS，读超时要拉长
+        proxy_read_timeout  3600s;
+        proxy_send_timeout  3600s;
+        proxy_buffering     off;
+    }
+
+    location / { return 404; }            # 其余路径一律拒绝
+}
+
+# ===== 方案 B：Lucky 反向代理（本机已安装）=====
+# 在 Lucky「反向代理 → 添加规则」里：
+#   前端域名   : d.example.com（在 Lucky 的 SSL 里为该域名申请/上传证书）
+#   后端地址   : 127.0.0.1:3081
+#   后端协议   : http
+#   监听端口   : 443（或独立端口，避免和 FnOS nginx 抢 443）
+#   关键开关   : 打开「WebSocket 支持 / 长连接」，保持 Host 头为后端
+#   路径匹配   : 仅 /ws/mobile（Lucky 的「子规则/路径」里限定，避免整站暴露）
+#
+# ===== 方案 C：Tunnel（无需公网 IP、无需端口映射）=====
+#   Cloudflare: cloudflared tunnel --url http://127.0.0.1:3081
+#               → wss://<随机名>.trycloudflare.com/ws/mobile（仅临时调试）
+#   Tailscale : tailscale serve --bg 3081
+#               → wss://<设备名>.<tailnet>.ts.net/ws/mobile
+#   注意：Tailscale 直连 http://100.x.x.x:3081 会被插件 403 拒绝
+#         （100.64.0.0/10 不在插件的私网白名单里），必须用 serve 走回环。

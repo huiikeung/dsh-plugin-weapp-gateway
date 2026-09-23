@@ -1,0 +1,50 @@
+{
+  "name": "dsh-plugin-weapp-gateway",
+  "version": "0.1.0",
+  "description": "Mobile gateway for dsh 0.1.5-rc.1/2 with per-session Agent preset selection before the first conversation, automatic preset locking after conversation starts, and live preset updates",
+  "main": "lib/index.mjs",
+  "files": [
+    "bin",
+    "helper",
+    "lib",
+    "docs",
+    "cordis.patch.yml",
+    "PROTOCOL.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/huiikeung/dsh-plugin-weapp-gateway.git"
+  },
+  "homepage": "https://github.com/huiikeung/dsh-plugin-weapp-gateway#readme",
+  "bugs": {
+    "url": "https://github.com/huiikeung/dsh-plugin-weapp-gateway/issues"
+  },
+  "dependencies": {
+    "@deepseek-ai/schemastery": "^3.18.1",
+    "ws": "^8.18.0",
+    "qrcode": "^1.5.4"
+  },
+  "bin": "bin/setup-ip.mjs",
+  "scripts": {
+    "test": "node test/wire-json.test.mjs && node test/setup-ip.test.mjs && node test/host-adapter.test.mjs && node test/session-preset.test.mjs && node test/session-follower.test.mjs && node test/gateway.test.mjs && node test/auth.test.mjs && node test/lan.test.mjs && node test/multi-gateway.test.mjs"
+  },
+  "exports": {
+    ".": "./lib/index.mjs",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-layout",
+        "@deepseek-ai/dsh-client-ui-sidebar"
+      ]
+    }
+  },
+  "license": "MIT"
+}

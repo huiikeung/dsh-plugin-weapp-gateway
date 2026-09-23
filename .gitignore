@@ -1,0 +1,16 @@
+# dependencies (install with `pnpm install`)
+node_modules/
+
+# logs & OS noise
+*.log
+.DS_Store
+.npmrc
+
+# backups / scratch
+*.bak
+*.orig
+*.tmp
+/.tmp/
+
+# local agent memory — not project content
+/.mnemon/

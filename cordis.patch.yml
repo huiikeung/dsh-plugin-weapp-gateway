@@ -1,0 +1,42 @@
+# dsh-plugin-weapp-gateway bundle patch.
+# Applied after dsh-base and dsh-web-app: inserts the persistent /ws/mobile
+# gateway row into the host plane (it consumes `webServer`, the Host Remote
+# Gateway and the `session/event` feed, and publishes no service of its own).
+- insert:
+    - id: mobile-gateway
+      name: 'dsh-plugin-weapp-gateway'
+      config:
+        # Secure by default: every mobile WebSocket must authenticate with a
+        # paired device credential. Pair/revoke APIs remain local-machine only.
+        gatewayEnabled: false
+        # Optional startup mode: disabled | temporary | persistent.
+        # Saved management-UI choices take precedence over startup config.
+        # gatewayMode: persistent
+        # gatewayName: Home PC
+        # gatewayStateFile: /path/to/instance-gateway.json
+        # Optional additional reachable addresses for this SAME gateway:
+        # endpoints:
+        #   - wss://gateway.example.com/ws/mobile
+        gatewayWaitTimeoutMs: 300000
+        requireAuth: true
+        adminLoopbackOnly: true
+        pairingTtlMs: 300000
+        # DSH WebUI remains loopback-only on 3080. The plugin owns this
+        # authenticated, WebSocket-only LAN listener for phones on the same
+        # private network.
+        lanEnabled: true
+        lanHost: 0.0.0.0
+        lanPort: 3081
+        # Written automatically by `sudo npx dsh-plugin-weapp-gateway setup`.
+        publicUrlFile: /etc/dsh-mobile-gateway/public-url
+
+# The gateway's `search` query channel needs the full-text session index,
+# which dsh-web-app deliberately ships as `openAt: never` (search disabled).
+# This later layer opts the deployment into on-demand opening: the node:sqlite
+# import and the in-memory index stay deferred until the first search call,
+# so startup is unaffected. A patch replaces the row's whole config, so both
+# keys are restated here.
+- id: session-query-sqlite
+  config:
+    path: ':memory:'
+    openAt: first-search
