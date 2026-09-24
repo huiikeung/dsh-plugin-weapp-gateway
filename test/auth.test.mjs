@@ -257,6 +257,8 @@ function expectRejected(url, options = {}) {
   assert.equal(connectedStatus.gatewayEnabled, true)
   assert.equal(connectedStatus.waitExpiresAt, null)
   assert.equal(typeof pairedFrame.token, 'string')
+  const pairedDeviceId = pairedFrame.device && pairedFrame.device.id
+  assert.equal(typeof pairedDeviceId, 'string')
   assert.equal(await expectRejected(
     `${wsUrl}?pairingCode=${encodeURIComponent(pairBody.payload.pairingCode)}`,
     { headers: { 'X-DSH-Device-ID': clientDeviceId } },
@@ -305,6 +307,109 @@ function expectRejected(url, options = {}) {
   await closePromise
   assert.equal(await expectRejected(wsUrl, { headers: { Authorization: `Bearer ${pairedFrame.token}` } }), 401)
   assert.equal(await expectRejected(wsUrl, { headers: { Authorization: `Bearer ${rePairedFrame.token}` } }), 401)
+
+  // ---- relay mode: the payload must not adopt the caller's address --------
+  // The fnOS runbook tells operators to put a LAN address in the WebSocket
+  // address field. Leaking that into the relay payload sends the mini-program
+  // straight at an endpoint it cannot authenticate against, so the relay
+  // payload always carries the configured public URL instead.
+  const relayRegister = await fetch(`${base}/mgw/relay`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Origin: base },
+    body: JSON.stringify({
+      relay: 'wss://relay.example.com',
+      nodeId: 'ecb2de50-7542-490b-af4f-aebfcb29c3c2',
+      agentPubKey: Buffer.alloc(32, 7).toString('base64'),
+      gatewayName: 'Relay Probe',
+    }),
+  })
+  assert.equal(relayRegister.status, 200)
+  assert.equal((await relayRegister.json()).relay.nodeId, 'ecb2de50-7542-490b-af4f-aebfcb29c3c2')
+
+  const modeRelay = await fetch(`${base}/mgw/mode`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Origin: base },
+    body: JSON.stringify({ mode: 'relay' }),
+  })
+  assert.equal(modeRelay.status, 200)
+  assert.equal((await modeRelay.json()).pairingMode, 'relay')
+
+  const relayPair = await fetch(`${base}/mgw/pair`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Origin: base },
+    body: JSON.stringify({ name: 'Relay Probe', publicUrl: 'ws://192.168.3.110:3081/ws/mobile' }),
+  })
+  assert.equal(relayPair.status, 201)
+  const relayPayload = (await relayPair.json()).payload
+  assert.equal(relayPayload.version, 3)
+  assert.equal(relayPayload.mode, 'relay')
+  assert.equal(relayPayload.relay, 'wss://relay.example.com')
+  assert.equal(relayPayload.nodeId, 'ecb2de50-7542-490b-af4f-aebfcb29c3c2')
+  assert.equal(relayPayload.gatewayUrl, 'wss://203.0.113.10/ws/mobile')
+  assert.equal('endpoints' in relayPayload, false)
+  assert.equal(relayPayload.pairingCode.length, 43)
+
+  const modeDirect = await fetch(`${base}/mgw/mode`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Origin: base },
+    body: JSON.stringify({ mode: 'direct' }),
+  })
+  assert.equal(modeDirect.status, 200)
+  const directPair = await fetch(`${base}/mgw/pair`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Origin: base },
+    body: JSON.stringify({ name: 'Direct Probe', publicUrl: wsUrl }),
+  })
+  assert.equal(directPair.status, 201)
+  const directPayload = (await directPair.json()).payload
+  assert.equal(directPayload.version, 2)
+  assert.equal(directPayload.publicUrl, wsUrl)
+  assert.equal('mode' in directPayload, false)
+
+  // ---- relabel a paired device (the relay connector renames its entry once
+  //      the phone reports its own model) ----
+  // Pair a fresh device: the earlier one in this test is revoked on purpose.
+  const renamePairResponse = await fetch(`${base}/mgw/pair`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Origin: base },
+    body: JSON.stringify({ name: 'Rename Probe', publicUrl: wsUrl }),
+  })
+  assert.equal(renamePairResponse.status, 201)
+  const renameCode = (await renamePairResponse.json()).payload.pairingCode
+  const renameSocket = new WebSocket(
+    wsUrl,
+    ['dsh-mobile-v1', `dsh-pair.${renameCode}`],
+    { headers: { 'X-DSH-Device-ID': `${clientDeviceId}-rename` } },
+  )
+  const renamePaired = await waitForMessage(renameSocket, 'paired')
+  const renameDeviceId = renamePaired.device.id
+  assert.equal(renamePaired.device.name, 'Rename Probe')
+
+  const renameOk = await fetch(`${base}/mgw/devices/${encodeURIComponent(renameDeviceId)}/rename`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Origin: base },
+    body: JSON.stringify({ name: 'Xiaomi 14 Ultra' }),
+  })
+  assert.equal(renameOk.status, 200)
+  assert.equal((await renameOk.json()).device.name, 'Xiaomi 14 Ultra')
+
+  const renameBlank = await fetch(`${base}/mgw/devices/${encodeURIComponent(renameDeviceId)}/rename`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Origin: base },
+    body: JSON.stringify({ name: '   ' }),
+  })
+  assert.equal(renameBlank.status, 404, 'a blank name is rejected, not silently applied')
+
+  const renameMissing = await fetch(`${base}/mgw/devices/does-not-exist/rename`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Origin: base },
+    body: JSON.stringify({ name: 'x' }),
+  })
+  assert.equal(renameMissing.status, 404)
+
+  const listAfterRename = await (await fetch(`${base}/mgw/devices`, { headers: { Origin: base } })).json()
+  assert.equal(listAfterRename.devices.find((d) => d.id === renameDeviceId).name, 'Xiaomi 14 Ultra')
+  renameSocket.close()
 
   const disableGatewayResponse = await fetch(`${base}/mgw/gateway`, {
     method: 'POST',
