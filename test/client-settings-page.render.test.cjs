@@ -177,7 +177,7 @@ for (const [needle, what] of [
   ['agentPubKey nU2yVdMWY2…fWjVy95Go=', 'public key shown as a fingerprint'],
   ['已注册的中继', 'relay registration hint'],
   ['小程序只能连接已配置的域名、且基本限于 443 端口', 'relay mode explains why a public direct URL is unreachable'],
-  ['中继链路本身已验证可用', 'relay warning states the backend is proven'],
+  ['中继链路已验证可用', 'relay warning states the backend is proven'],
   ['mgw-callout', 'the hint gets a rounded callout background'],
   ['留空自动识别手机型号', 'relay placeholder no longer suggests iPhone'],
   ['留空时由本机连接器按所连接手机的型号自动命名', 'relay device-name hint explains auto-naming'],
@@ -187,6 +187,7 @@ for (const [needle, what] of [
   ['中继模式下小程序不直连它', 'explains the demotion'],
   ['公网接入（中继模式下只影响上面透传的网关地址）', 'public-access label explains its reduced scope'],
 ]) check(htmlB.includes(needle), what)
+check(!htmlB.includes('mgw-note mgw-danger'), 'no bare red note is left in the relay group')
 check(!htmlB.includes('nU2yVdMWY2fePU9MHkkD6PQJ3V+FkyItgDfWjVy95Go='), 'full public key is not dumped into the page')
 
 // ---------------------------------------------------- render C: populated, direct
