@@ -227,6 +227,8 @@ check(!src.includes('shell.overlay'), 'no shell.overlay contribution')
 check(!src.includes('position:fixed'), 'no fixed-position (floating) styling')
 check(!src.includes('setOpen'), 'no open/close store left behind')
 check(src.includes("id: 'mobile-gateway'"), 'registers the mobile-gateway settings section')
+check(src.includes('function apiPath') && src.includes('document.baseURI')
+  && src.includes('fetch(apiPath(path)'), 'management RPC resolves against the document base (gateway prefix safe)')
 
 console.log(`\nhtml A: ${htmlA.length} bytes · html B: ${htmlB.length} bytes`)
 if (failed) { console.error(`\n${failed} check(s) FAILED`); process.exit(1) }
