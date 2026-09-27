@@ -116,7 +116,7 @@ const seeds = [
   [{ id: 'd1', name: 'My Phone', online: true, connections: 2, lastSeenAt: 1758000000000 }], // devices
   {                                                                                          // status
     gatewayEnabled: true, gatewayMode: 'persistent', gatewayId: '9f1c-uuid', gatewayName: '家里电脑',
-    requireAuth: true, version: '0.7.6', webPort: 2298, wsPath: '/ws/mobile', publicUrl: '',
+    requireAuth: true, version: '0.7.7', webPort: 2298, wsPath: '/ws/mobile', publicUrl: '',
     pairingMode: 'relay',
     relay: {
       relay: 'wss://relay.ahwe.top', nodeId: 'ecb2de50-7542-490b-af4f-aebfcb29c3c2',
@@ -166,7 +166,7 @@ for (const [needle, what] of [
   ['在线 · 2 个连接', 'device online badge'],
   ['>吊销<', 'revoke button present'],
   ['已刷新 · 10:00:00', 'refresh notice'],
-  ['v0.7.6', 'version footer'],
+  ['v0.7.7', 'version footer'],
   ['完成', 'close button'],
   ['连接模式', 'connection-mode group'],
   ['直连', 'direct option offered'],

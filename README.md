@@ -4,12 +4,14 @@
 
 # dsh-plugin-weapp-gateway
 
-DeepSeek Harness 的设备鉴权移动网关，支持会话与实时事件、排队消息同步及编辑/删除/Steer、Session 归档和重命名的双向同步、停止当前生成并稍后继续、任务列表和当前 Goal 同步及管理、服务端驱动的命令和技能菜单、Human-in-the-loop、图片及文件传输。安装后，Harness WebUI 左侧边栏会出现“移动设备”入口，可直接开启网关、生成配对二维码和管理可信设备。
+DeepSeek Harness 的设备鉴权移动网关，支持会话与实时事件、排队消息同步及编辑/删除/Steer、Session 归档和重命名的双向同步、停止当前生成并稍后继续、任务列表和当前 Goal 同步及管理、服务端驱动的命令和技能菜单、Human-in-the-loop、图片及文件传输。本 fork 不占用侧边栏：全部管理能力集中在 Harness WebUI 的「设置 → 移动设备」页面，可直接开启网关、生成配对二维码和管理可信设备；离开该页面即停止轮询，不再有任何悬浮层。
 
 > 当前源码以 **DSH 0.1.7-rc.2** 为适配基线，使用 Session format 4；旧版历史游标需重新取得基线。
 >
 > 实时流已改为独立 `assistant-stream` 帧，移动端需要按 [rc.2 接入说明](docs/dsh-rc2-mobile-integration.md) 更新订阅、缓存与分页处理。当前修改尚未发布。
 >
+> v0.7.7：同步上游 v0.8.0（DSH 0.1.7-rc.2 / Session format 4、inbox 排队消息同步、Schedule 与 Permission Presets、审批 `displayReason`），管理界面仅保留在「设置 → 移动设备」，不再提供侧边栏入口。
+
 > v0.7.3：优化移动网关运行模式下拉框的箭头间距。
 >
 > v0.7.2：新增独立对话/控制连接、空 Session 创建、停止生成与稍后继续、排队消息同步及编辑/删除/Steer，以及 Session 归档和重命名的双向同步。
@@ -102,13 +104,13 @@ npx --yes dsh-plugin-weapp-gateway@latest init
 dsh web
 ```
 
-打开 WebUI，确认左侧边栏底部出现“移动设备”。
+打开 WebUI，进入「设置」确认出现「移动设备」页面（侧边栏不会新增入口）。
 
 ## 局域网配对
 
 适用于 DSH 电脑和 iPhone 位于同一个可互访的局域网。
 
-1. 打开 WebUI 的“移动设备”。
+1. 在 WebUI 的「设置」中打开“移动设备”。
 2. 将“网关运行模式”设为“常驻开启”（短期配对也可选“临时开启”）。
 3. 保持“设备鉴权”开启。
 4. 确认面板显示 `ws://<电脑局域网 IP>:3081/ws/mobile`。
@@ -166,7 +168,7 @@ http://127.0.0.1:<本地端口>
 
 ### 4. 在 UI 配置公网入口
 
-打开左侧的“移动设备”，在“公网接入”填写云厂商控制台提供的公网 IPv4，然后点击“配置公网接入”或“更新公网配置”。Helper 会自动读取当前 `dsh web` 端口并配置 Nginx、TLS 证书和 `wss://<公网 IP>/ws/mobile`。
+在 WebUI「设置 → 移动设备」中打开面板，在“公网接入”填写云厂商控制台提供的公网 IPv4，然后点击“配置公网接入”或“更新公网配置”。Helper 会自动读取当前 `dsh web` 端口并配置 Nginx、TLS 证书和 `wss://<公网 IP>/ws/mobile`。
 
 <p align="center">
   <img src="docs/assets/public-access-ui.png" alt="在移动设备面板配置公网接入" width="420">
@@ -264,7 +266,7 @@ sudo env "PATH=$PATH" npx --yes dsh-plugin-weapp-gateway@latest remove-helper
 
 | 现象 | 处理方式 |
 |---|---|
-| WebUI 没有“移动设备” | 确认安装在 `web` profile，并完整重启 `dsh web` |
+| 「设置」里没有“移动设备” | 确认安装在 `web` profile，并完整重启 `dsh web` |
 | iOS 收到 `503` | 回到 WebUI 开启“允许移动设备连接” |
 | iOS 收到 `401` | 在 WebUI 重新生成二维码并配对 |
 | Linux 服务器公网连接超时 | 检查云安全组、服务器防火墙和 TCP `80/443` |
