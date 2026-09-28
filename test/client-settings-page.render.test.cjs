@@ -124,7 +124,7 @@ const seeds = [
   [{ id: 'd1', name: 'My Phone', online: true, connections: 2, lastSeenAt: 1758000000000 }], // devices
   {                                                                                          // status
     gatewayEnabled: true, gatewayMode: 'persistent', gatewayId: '9f1c-uuid', gatewayName: '家里电脑',
-    requireAuth: true, version: '0.7.12', webPort: 2298, wsPath: '/ws/mobile', publicUrl: '',
+    requireAuth: true, version: '0.7.13', webPort: 2298, wsPath: '/ws/mobile', publicUrl: '',
     platform: 'linux', webPid: 4321,
     tools: { restartWeb: true, stopWeb: true },
     cloudflare: { supported: false, enabled: false, state: 'disabled', port: 3082, configured: false },
@@ -185,7 +185,7 @@ for (const [needle, what] of [
   ['在线 · 2 个连接', 'device online badge'],
   ['>吊销<', 'revoke button present'],
   ['已刷新 · 10:00:00', 'refresh notice'],
-  ['v0.7.12', 'version footer'],
+  ['v0.7.13', 'version footer'],
   ['完成', 'close button'],
   ['连接模式', 'connection-mode group'],
   ['直连', 'direct option offered'],
