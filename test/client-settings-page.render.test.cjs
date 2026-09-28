@@ -118,7 +118,7 @@ const seeds = [
   [{ id: 'd1', name: 'My Phone', online: true, connections: 2, lastSeenAt: 1758000000000 }], // devices
   {                                                                                          // status
     gatewayEnabled: true, gatewayMode: 'persistent', gatewayId: '9f1c-uuid', gatewayName: '家里电脑',
-    requireAuth: true, version: '0.7.8', webPort: 2298, wsPath: '/ws/mobile', publicUrl: '',
+    requireAuth: true, version: '0.7.9', webPort: 2298, wsPath: '/ws/mobile', publicUrl: '',
     platform: 'linux', webPid: 4321,
     tools: { restartWeb: true, stopWeb: true },
     cloudflare: { supported: false, enabled: false, state: 'disabled', port: 3082, configured: false },
@@ -179,7 +179,7 @@ for (const [needle, what] of [
   ['在线 · 2 个连接', 'device online badge'],
   ['>吊销<', 'revoke button present'],
   ['已刷新 · 10:00:00', 'refresh notice'],
-  ['v0.7.8', 'version footer'],
+  ['v0.7.9', 'version footer'],
   ['完成', 'close button'],
   ['连接模式', 'connection-mode group'],
   ['直连', 'direct option offered'],
@@ -208,7 +208,7 @@ for (const [needle, what] of [
 ]) check(htmlB.includes(needle), what)
 check(!htmlB.includes('mgw-note mgw-danger'), 'no bare red note is left in the relay group')
 check(!htmlB.includes('nU2yVdMWY2fePU9MHkkD6PQJ3V+FkyItgDfWjVy95Go='), 'full public key is not dumped into the page')
-check(!htmlB.includes('Cloudflare Tunnel · PC 外网接入'), 'cloudflare section hidden when tunnel is unsupported')
+check(!htmlB.includes('Cloudflare Tunnel · 外网接入'), 'cloudflare section hidden when tunnel is unsupported')
 
 // ---------------------------------------------------- render C: populated, direct
 // The operator's everyday state: a live gateway in direct mode. Covers the other
@@ -263,7 +263,7 @@ const cfRegistrations = []
 cfExported.apply({ slots: { inject: (n, t) => t(), register: (o, c) => { cfRegistrations.push({ options: o, component: c }); return () => {} } } })
 const htmlD = renderToStaticMarkup(React.createElement(cfRegistrations[0].component, { close: () => {} }))
 for (const [needle, what] of [
-  ['Cloudflare Tunnel · PC 外网接入', 'cloudflare group rendered on PC'],
+  ['Cloudflare Tunnel · 外网接入', 'cloudflare group rendered on PC'],
   ['Quick Tunnel · 无需域名', 'quick mode option offered'],
   ['命名 Tunnel · 固定域名', 'named mode option offered'],
   ['更新 Tunnel 配置', 'tunnel action reflects enabled state'],
@@ -273,6 +273,36 @@ for (const [needle, what] of [
   ['当前不是通过 dsh web 启动的 Web profile', 'tools availability explained'],
 ]) check(htmlD.includes(needle), what)
 check(!htmlD.includes('Nginx'), 'linux public-access block hidden on PC')
+check(!htmlD.includes('Linux 服务器不自动下载'), 'PC shows the managed-download note, not the Linux one')
+
+// ------------------------------------------------ render E: Cloudflare tunnel (Linux)
+// The fork's Linux shape: the same tunnel, but the card leads with the manual
+// install instructions and the Linux public-access block comes back.
+console.log('\n=== render E: Cloudflare tunnel (Linux) ===')
+const cfLinuxSeeds = JSON.parse(JSON.stringify(seeds))
+cfLinuxSeeds[23] = () => new Set()
+cfLinuxSeeds[1].pairingMode = 'direct'
+cfLinuxSeeds[1].relay = null
+cfLinuxSeeds[1].platform = 'linux'
+cfLinuxSeeds[1].cloudflare = {
+  supported: true, enabled: false, mode: 'quick', state: 'disabled', port: 3082,
+  configured: false, hostname: '', publicUrl: null, error: '',
+}
+const cfLinuxExported = loadBundle(seededReact(cfLinuxSeeds)).factory((id) => {
+  if (id === 'react') return seededReact(cfLinuxSeeds)
+  throw new Error(`unexpected require: ${id}`)
+})
+const cfLinuxRegistrations = []
+cfLinuxExported.apply({ slots: { inject: (n, t) => t(), register: (o, c) => { cfLinuxRegistrations.push({ options: o, component: c }); return () => {} } } })
+const htmlE = renderToStaticMarkup(React.createElement(cfLinuxRegistrations[0].component, { close: () => {} }))
+for (const [needle, what] of [
+  ['Cloudflare Tunnel · 外网接入', 'cloudflare group rendered on Linux'],
+  ['Linux 服务器不自动下载', 'linux card explains the manual install'],
+  ['pkg.cloudflare.com', 'linux card names the official package source'],
+  ['一键开启 Quick Tunnel', 'quick tunnel can be started from Linux'],
+  ['未开启', 'tunnel idle state shown'],
+]) check(htmlE.includes(needle), what)
+check(htmlE.includes('Nginx'), 'linux public-access block stays visible on Linux')
 
 // ------------------------------------------------------- source-level guarantees
 console.log('\n=== source guarantees ===')

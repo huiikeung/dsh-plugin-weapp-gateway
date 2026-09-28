@@ -131,6 +131,11 @@ invalid token                        # 网关自己的应用 token 校验
 | **FnOS 自带 nginx** | 已有可信证书 | `127.0.0.1:3081`，只加一个 `location = /ws/mobile` |
 | **Tunnel**（cloudflared / `tailscale serve`） | 无公网 IP、临时或长期 | 转发到 `127.0.0.1:3081` |
 
+v0.7.9 起（本 fork）fnOS 上也可以直接用面板的「Cloudflare Tunnel」分组：先
+`apt-get install cloudflared`（Cloudflare 官方源，见 README 的 Linux 小节），面板即可开启
+Quick / 命名 Tunnel。它走插件自己的 `127.0.0.1:3082` 专用入口（只放行 `/ws/mobile`），
+与上表三种转发到 `3081` 的做法不同，可按需二选一。
+
 ⚠️ 唯一注意：**Tailscale 直连 `http://100.x.x.x:3081` 会被插件 403**，
 因为 `isPrivateNetworkHostname()` 的白名单只有 `10/8、172.16/12、192.168/16、169.254/16、localhost、.local、fc00::/7`，
 **不含 `100.64.0.0/10`（CGNAT）**。必须用 `tailscale serve`（从回环发起）。

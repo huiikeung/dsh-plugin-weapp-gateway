@@ -13,6 +13,8 @@ DeepSeek Harness 的设备鉴权移动网关，支持会话与实时事件、排
 > v0.7.7：同步上游 v0.8.0（DSH 0.1.7-rc.2 / Session format 4、inbox 排队消息同步、Schedule 与 Permission Presets、审批 `displayReason`），管理界面仅保留在「设置 → 移动设备」，不再提供侧边栏入口。
 >
 > v0.7.8：同步上游 v0.8.1（PC 端可开启 Cloudflare Quick / 命名 Tunnel、配对面板增加局域网与外网入口选择指引、工具菜单可重启网关或停止 DSH Web），管理界面仅保留在「设置 → 移动设备」。
+>
+> v0.7.9：Cloudflare Tunnel 扩展到 Linux 服务器（本 fork 定制）：上游仅支持 Windows/macOS 自动下载校验 `cloudflared`，本 fork 允许在 Linux 上使用 Cloudflare 官方 apt 源安装的 `cloudflared`（或配置 `cloudflaredPath` 指向任意可执行文件），隧道机制不变。
 > v0.7.3：优化移动网关运行模式下拉框的箭头间距。
 >
 > v0.7.2：新增独立对话/控制连接、空 Session 创建、停止生成与稍后继续、排队消息同步及编辑/删除/Steer，以及 Session 归档和重命名的双向同步。
@@ -204,6 +206,22 @@ Quick Tunnel 无需 Cloudflare 账户、Token 或自己的公网域名，但地�
 
 两种 Cloudflare 入口都只接受 `/ws/mobile` WebSocket，其他 HTTP 路径（包括 DSH WebUI 和 `/mgw` 管理接口）返回 404；设备凭证始终必需，即使本机 Debug 鉴权被关闭也一样。命名 Tunnel 的 Token 保存在 `<deviceFile>.cloudflare.json`（默认 `~/.dsh/mobile-gateway-devices.json.cloudflare.json`），权限为 `0600`，不会返回给浏览器。默认使用 DSH 私有的 `cloudflared-bin` 缓存，不读取系统或其他 App 的 `cloudflared`；每次启动 Tunnel 都校验缓存文件，只有缓存缺失或损坏时才下载固定版本并核对 Cloudflare 官方发布资产的 SHA-256。仅在显式配置 `cloudflaredPath` 时使用外部程序。使用自定义 `cloudflarePort` 时，命名 Tunnel 路由的 Service URL 端口也要相应修改。
 
+### Linux 服务器（本 fork 定制）
+
+上游把 Cloudflare Tunnel 限定在 Windows / macOS：自动下载只覆盖这两个平台的发布资产。本 fork 放开了 Linux：Cloudflare 官方为 Debian/Ubuntu 提供 GPG 签名的 `cloudflared` 包（[pkg.cloudflare.com](https://pkg.cloudflare.com/)），由系统包管理器负责来源可信，插件直接使用已安装的程序，不再自行下载。
+
+安装（Debian / Ubuntu 源，以 root 执行一次）：
+
+```bash
+mkdir -p --mode=0755 /usr/share/keyrings
+curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg -o /usr/share/keyrings/cloudflare-main.gpg
+echo 'deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared any main' \
+  > /etc/apt/sources.list.d/cloudflared.list
+apt-get update && apt-get install -y cloudflared
+```
+
+安装后「移动设备 → Cloudflare Tunnel」分组即出现在面板（与 Windows/macOS 相同）。插件按以下顺序定位程序：profile 配置里的 `cloudflaredPath`（绝对路径优先），否则在 PATH 中查找 `cloudflared`；都不存在时面板会提示上面的安装命令。其余行为（Quick / 命名模式、配对地址自动填入、Token 保存、`/ws/mobile` 之外一律 404）与 PC 完全一致；Linux 同样不会监听 DSH WebUI 或 `/mgw` 的对外路径。
+
 ### Tailscale（推荐长期使用）
 
 1. 在电脑和 iPhone 安装 [Tailscale](https://tailscale.com/download)，并登录同一个 Tailnet。
@@ -226,6 +244,7 @@ Tailscale Serve 只允许同一 Tailnet 中符合访问规则的设备连接，�
 | 本机 iOS 模拟器 | DSH WebUI 本地入口 | `ws://127.0.0.1:<DSH WebUI 端口>/ws/mobile` | 无需 Helper、Nginx 或独立的 `3081` 端口 | 不开放任何外部端口；仅 Debug 时可关闭鉴权 |
 | Linux 公网服务器 | 插件 Helper + Nginx + TLS | `wss://<服务器公网 IPv4>/ws/mobile` | 执行 `init`，再从 WebUI 填写公网 IPv4 | 云安全组放行 TCP `80/443`；不要公开 DSH 端口和 `3081`；必须鉴权 |
 | 家用 Windows / macOS | Cloudflare 命名 Tunnel | `wss://<公开域名>/ws/mobile` | 在 Cloudflare 建立公开域名到 `127.0.0.1:3082` 的路由；面板填写域名与 Token 并开启 | 无需路由器端口转发；独立入口强制设备鉴权 |
+| Linux 服务器（本 fork） | Cloudflare 命名 / Quick Tunnel | `wss://<公开域名或随机域>/ws/mobile` | apt 源安装 `cloudflared`（见上文），面板操作与 PC 相同 | 无需路由器端口转发；独立入口强制设备鉴权 |
 | 家用 Windows / macOS | Cloudflare Quick Tunnel | `wss://<随机名称>.trycloudflare.com/ws/mobile` | 面板一键开启；重启或重连后地址变化需重新扫码 | 无需域名、账户或端口转发；独立入口强制设备鉴权 |
 | 家用 Windows / macOS | Tailscale Serve | `wss://<Tailscale 域名>/ws/mobile` | 手动转发到 `127.0.0.1:3081`，将生成的地址填入 WebUI | 无需路由器端口转发；保持鉴权开启 |
 
@@ -276,6 +295,7 @@ sudo env "PATH=$PATH" npx --yes dsh-plugin-weapp-gateway@latest remove-helper
 | Linux 服务器公网地址没有显示 | 在“移动设备 → 公网接入”填写公网 IPv4 并点击更新 |
 | Cloudflare 下载失败 | 检查 PC 到 GitHub Releases 的连接；也可自行安装 cloudflared，并把 `cloudflaredPath` 设为可执行文件的绝对路径 |
 | Quick Tunnel 重启后 App 无法连接 | Quick 地址可能已变化，在面板重新生成二维码并让 App 扫码更新配对；需要固定地址时改用命名 Tunnel |
+| 面板提示未找到 cloudflared（Linux） | 按上文 apt 命令安装 Cloudflare 官方 `cloudflared`，或把 `cloudflaredPath` 指向已有可执行文件后重启 |
 | Quick Tunnel 未能启动且 PC 已有 Cloudflare 配置 | Cloudflare 当前不支持 Quick Tunnel 与 `~/.cloudflared/config.yaml` 共用该配置目录；检查面板错误并按 [官方说明](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/do-more-with-tunnels/trycloudflare/) 处理 |
 | Cloudflare 已连接但 App 无法访问 | 确认公开域名路由的 Service URL 是面板显示的 `http://127.0.0.1:<端口>`，并检查 DNS 与设备配对凭证 |
 | 需要查看服务端日志 | 执行 `tail -f /tmp/mobile-gateway.log` |
