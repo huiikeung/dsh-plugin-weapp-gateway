@@ -16,7 +16,9 @@ DeepSeek Harness 的设备鉴权移动网关，支持会话与实时事件、排
 >
 > v0.7.9：Cloudflare Tunnel 扩展到 Linux 服务器（本 fork 定制）：上游仅支持 Windows/macOS 自动下载校验 `cloudflared`，本 fork 允许在 Linux 上使用 Cloudflare 官方 apt 源安装的 `cloudflared`（或配置 `cloudflaredPath` 指向任意可执行文件），隧道机制不变。
 >
-> v0.7.10：下拉选择框改为主题感知的自绘箭头（appearance 重置 + hover/禁用态 + 跟随明暗的 chevron），不再用浏览器原生样式；「配对连接方式」在 Cloudflare Tunnel 受支持时始终列出该项（未开启时标注「未开启」并引导先去开启），修复关着隧道时该选项直接消失、看起来像没接入的问题。
+> v0.7.10：下拉选择框改为主题感知的自绘箭头
+>
+> v0.7.11：下拉改为完全自绘的列表框（触发器 + 弹出面板 + 键盘导航，支持 Escape / 点击外部关闭），展开样式跟随宿主明暗主题；「配对连接方式」与「Cloudflare 接入方式」两个下拉均换用该组件。（appearance 重置 + hover/禁用态 + 跟随明暗的 chevron），不再用浏览器原生样式；「配对连接方式」在 Cloudflare Tunnel 受支持时始终列出该项（未开启时标注「未开启」并引导先去开启），修复关着隧道时该选项直接消失、看起来像没接入的问题。
 > v0.7.3：优化移动网关运行模式下拉框的箭头间距。
 >
 > v0.7.2：新增独立对话/控制连接、空 Session 创建、停止生成与稍后继续、排队消息同步及编辑/删除/Steer，以及 Session 归档和重命名的双向同步。

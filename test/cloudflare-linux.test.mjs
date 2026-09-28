@@ -58,7 +58,7 @@ const stateFile = path.join(temp, 'state.json')
 const spawns = []
 const spawned = createCloudflareTunnel({
   file: stateFile,
-  port: 3082,
+  port: 3182,
   wsPath: '/ws/mobile',
   supported: true,
   isGatewayEnabled: () => true,
@@ -75,7 +75,7 @@ await new Promise((resolve) => setTimeout(resolve, 30))
 check(spawns.length === 1, 'linux supported tunnel spawns a child')
 check(spawns[0]?.command === externalBinary, 'linux tunnel runs the installed cloudflared binary')
 const quickArgs = spawns[0]?.args || []
-check(quickArgs.includes('--url') && quickArgs[quickArgs.indexOf('--url') + 1] === 'http://127.0.0.1:3082',
+check(quickArgs.includes('--url') && quickArgs[quickArgs.indexOf('--url') + 1] === 'http://127.0.0.1:3182',
   'quick mode targets the loopback mobile endpoint')
 const snap = spawned.snapshot()
 check(snap.supported === true && snap.enabled === true, 'snapshot reports an enabled supported tunnel on linux')

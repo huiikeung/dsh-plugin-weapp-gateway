@@ -51,10 +51,16 @@ function seededReact(seeds) {
     get(target, prop) {
       if (prop === 'useState') {
         return (initial) => {
-          const seed = seeds[i++]
-          if (seed === undefined) throw new Error(`no seed for useState #${i}`)
-          const value = typeof seed === 'function' ? seed() : seed
-          return [value, () => {}]
+          if (i < seeds.length) {
+            const seed = seeds[i++]
+            if (seed === undefined) throw new Error(`no seed for useState #${i}`)
+            const value = typeof seed === 'function' ? seed() : seed
+            return [value, () => {}]
+          }
+          // Past the section's own hook list: child components with internal
+          // state (the Select's open flag) run the real hooks — they render
+          // their initial state, which is all a static render needs.
+          return target.useState(initial)
         }
       }
       const value = target[prop]
@@ -118,7 +124,7 @@ const seeds = [
   [{ id: 'd1', name: 'My Phone', online: true, connections: 2, lastSeenAt: 1758000000000 }], // devices
   {                                                                                          // status
     gatewayEnabled: true, gatewayMode: 'persistent', gatewayId: '9f1c-uuid', gatewayName: '家里电脑',
-    requireAuth: true, version: '0.7.10', webPort: 2298, wsPath: '/ws/mobile', publicUrl: '',
+    requireAuth: true, version: '0.7.11', webPort: 2298, wsPath: '/ws/mobile', publicUrl: '',
     platform: 'linux', webPid: 4321,
     tools: { restartWeb: true, stopWeb: true },
     cloudflare: { supported: false, enabled: false, state: 'disabled', port: 3082, configured: false },
@@ -179,7 +185,7 @@ for (const [needle, what] of [
   ['在线 · 2 个连接', 'device online badge'],
   ['>吊销<', 'revoke button present'],
   ['已刷新 · 10:00:00', 'refresh notice'],
-  ['v0.7.10', 'version footer'],
+  ['v0.7.11', 'version footer'],
   ['完成', 'close button'],
   ['连接模式', 'connection-mode group'],
   ['直连', 'direct option offered'],
@@ -204,7 +210,6 @@ for (const [needle, what] of [
   ['停止 DSH Web', 'stop tool offered'],
   ['配对连接方式', 'pairing route selector rendered'],
   ['自动选择 · 优先外网', 'auto route option offered'],
-  ['手动输入地址', 'custom route option offered'],
 ]) check(htmlB.includes(needle), what)
 check(!htmlB.includes('mgw-note mgw-danger'), 'no bare red note is left in the relay group')
 check(!htmlB.includes('nU2yVdMWY2fePU9MHkkD6PQJ3V+FkyItgDfWjVy95Go='), 'full public key is not dumped into the page')
@@ -247,6 +252,7 @@ for (const needle of ['wss://relay.ahwe.top', 'nodeId ecb2de50', 'agentPubKey nU
 console.log('\n=== render D: Cloudflare tunnel (PC) ===')
 const cfSeeds = JSON.parse(JSON.stringify(seeds))
 cfSeeds[23] = () => new Set()
+cfSeeds[3] = 'cloudflare'
 cfSeeds[1].pairingMode = 'direct'
 cfSeeds[1].relay = null
 cfSeeds[1].platform = 'win32'
@@ -265,11 +271,10 @@ const htmlD = renderToStaticMarkup(React.createElement(cfRegistrations[0].compon
 for (const [needle, what] of [
   ['Cloudflare Tunnel · 外网接入', 'cloudflare group rendered on PC'],
   ['Quick Tunnel · 无需域名', 'quick mode option offered'],
-  ['命名 Tunnel · 固定域名', 'named mode option offered'],
   ['更新 Tunnel 配置', 'tunnel action reflects enabled state'],
   ['关闭 Cloudflare Tunnel', 'tunnel can be turned off'],
   ['已连接 Cloudflare · wss://quiet-storm-42.trycloudflare.com', 'tunnel state and public url shown'],
-  ['Cloudflare 外网', 'cloudflare pairing route offered while enabled'],
+  ['Cloudflare 外网', 'cloudflare pairing route label in the trigger while enabled'],
   ['当前不是通过 dsh web 启动的 Web profile', 'tools availability explained'],
 ]) check(htmlD.includes(needle), what)
 check(!htmlD.includes('Nginx'), 'linux public-access block hidden on PC')
@@ -281,6 +286,7 @@ check(!htmlD.includes('Linux 服务器不自动下载'), 'PC shows the managed-d
 console.log('\n=== render E: Cloudflare tunnel (Linux) ===')
 const cfLinuxSeeds = JSON.parse(JSON.stringify(seeds))
 cfLinuxSeeds[23] = () => new Set()
+cfLinuxSeeds[3] = 'cloudflare'
 cfLinuxSeeds[1].pairingMode = 'direct'
 cfLinuxSeeds[1].relay = null
 cfLinuxSeeds[1].platform = 'linux'
@@ -311,13 +317,18 @@ console.log('\n=== source guarantees ===')
 check(!src.includes('sidebar.footer.action'), 'no sidebar.footer.action contribution')
 check(!src.includes('shell.overlay'), 'no shell.overlay contribution')
 check(!src.includes('position:fixed'), 'no fixed-position (floating) styling')
-check(!src.includes('setOpen'), 'no open/close store left behind')
+check(!src.includes('sidebar.footer.action'), 'no sidebar footer action re-added alongside the custom Select')
 check(src.includes("id: 'mobile-gateway'"), 'registers the mobile-gateway settings section')
 check(src.includes('function apiPath') && src.includes('document.baseURI')
   && src.includes('fetch(apiPath(path)'), 'management RPC resolves against the document base (gateway prefix safe)')
 check(src.includes("'/mgw/cloudflare'") && src.includes('/mgw/tools/') && src.includes('pairingUrlFor'),
   'cloudflare tunnel, web tools and pairing routes wired')
+check(src.includes("'Quick Tunnel · 无需域名'") && src.includes("'命名 Tunnel · 固定域名'") && src.includes("'手动输入地址'"),
+  'custom Select offers cloudflare modes and the custom route')
+check(src.includes("keydown', onKeyDown") && src.includes("if (event.key === 'Escape') setOpen(false)"),
+  'custom Select closes on Escape and on outside mousedown')
+check(!src.includes("createElement('select'"), 'no native select left in the panel')
 
-console.log(`\nhtml A: ${htmlA.length} bytes · html B: ${htmlB.length} bytes`)
+console.log(`\nhtml A: ${htmlA.length} bytes · html B: ${htmlB.length} bytes · html C: ${htmlC.length} bytes · html D: ${htmlD.length} bytes · html E: ${htmlE.length} bytes`)
 if (failed) { console.error(`\n${failed} check(s) FAILED`); process.exit(1) }
 console.log('ALL CHECKS PASSED')
