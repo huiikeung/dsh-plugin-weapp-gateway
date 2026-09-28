@@ -18,7 +18,9 @@ DeepSeek Harness 的设备鉴权移动网关，支持会话与实时事件、排
 >
 > v0.7.10：下拉选择框改为主题感知的自绘箭头
 >
-> v0.7.11：下拉改为完全自绘的列表框（触发器 + 弹出面板 + 键盘导航，支持 Escape / 点击外部关闭），展开样式跟随宿主明暗主题；「配对连接方式」与「Cloudflare 接入方式」两个下拉均换用该组件。（appearance 重置 + hover/禁用态 + 跟随明暗的 chevron），不再用浏览器原生样式；「配对连接方式」在 Cloudflare Tunnel 受支持时始终列出该项（未开启时标注「未开启」并引导先去开启），修复关着隧道时该选项直接消失、看起来像没接入的问题。
+> v0.7.11：下拉改为完全自绘的列表框
+>
+> v0.7.12：命名 Tunnel 的表单里内置「Cloudflare 控制台 → 隧道」与「官方创建教程」两个跳转链接，并说明 Token（安装命令里 eyJ… 那段）与 Service URL 的获取位置；README 同步改写为五步流程。（触发器 + 弹出面板 + 键盘导航，支持 Escape / 点击外部关闭），展开样式跟随宿主明暗主题；「配对连接方式」与「Cloudflare 接入方式」两个下拉均换用该组件。（appearance 重置 + hover/禁用态 + 跟随明暗的 chevron），不再用浏览器原生样式；「配对连接方式」在 Cloudflare Tunnel 受支持时始终列出该项（未开启时标注「未开启」并引导先去开启），修复关着隧道时该选项直接消失、看起来像没接入的问题。
 > v0.7.3：优化移动网关运行模式下拉框的箭头间距。
 >
 > v0.7.2：新增独立对话/控制连接、空 Session 创建、停止生成与稍后继续、排队消息同步及编辑/删除/Steer，以及 Session 归档和重命名的双向同步。
@@ -204,9 +206,15 @@ Quick Tunnel 无需 Cloudflare 账户、Token 或自己的公网域名，但地�
 
 ### Cloudflare 命名 Tunnel（固定地址）
 
-1. 在 [Cloudflare 控制台创建远程管理的 Tunnel](https://developers.cloudflare.com/tunnel/get-started/)，添加一个公开域名（例如 `gateway.example.com`），将该路由的 **Service URL** 设为 `http://127.0.0.1:3082`。无需安装 Cloudflare 系统服务，也无需开放路由器入站端口。
-2. 从 Tunnel 的「Add a replica」安装命令中复制 Token，在 DSH「移动设备 → Cloudflare Tunnel」选择「命名 Tunnel · 固定域名」，输入公开域名和 Token 后开启。插件会将网关设为常驻模式，启动本机专用入口和 `cloudflared`。面板显示「已连接 Cloudflare」后使用自动填入的 `wss://gateway.example.com/ws/mobile` 生成配对二维码。
-3. 以后启动 `dsh web` 会自动恢复已开启的 Tunnel；在面板点击「关闭 Cloudflare Tunnel」会停止插件管理的 `cloudflared` 并关闭本机专用入口。若手动关闭网关，Tunnel 会暂停，重新开启网关后恢复。
+面板（「移动设备 → Cloudflare Tunnel」选「命名 Tunnel」）里内置了两个跳转链接：
+[Cloudflare 控制台 → 隧道](https://dash.cloudflare.com/?to=/:account/tunnels) 和
+[官方创建教程](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/get-started/create-remote-tunnel/)。
+
+1. 打开控制台 → **Networking > Tunnels** → **Create a tunnel** → 选 `Cloudflared` → 填一个 Tunnel 名字（如 `dsh-nas`）。
+2. 控制台随后给出安装命令（`cloudflared service install <Token>` 的形式）。**Token 就是这条命令里 `eyJ…` 开头的那一段**——插件会用自己的 cloudflared 运行，你不需要在 NAS 上执行这条命令，只需复制 Token。
+3. 在 Tunnel 的 **Routes / Public Hostname** 里添加一条路由：子域名 + 域名（例如 `gw.example.com`，域名需托管在 Cloudflare），**Service URL 设为 `http://127.0.0.1:3082`**（与面板里显示的本机端口一致；自定义 `cloudflarePort` 时同步修改）。
+4. 回到面板填入公开域名和 Token，点「开启命名 Tunnel」。插件会将网关设为常驻模式，启动本机专用入口和 `cloudflared`。面板显示「已连接 Cloudflare」后使用自动填入的 `wss://gw.example.com/ws/mobile` 生成配对二维码。
+5. 以后启动 `dsh web` 会自动恢复已开启的 Tunnel；在面板点击「关闭 Cloudflare Tunnel」会停止插件管理的 `cloudflared` 并关闭本机专用入口。若手动关闭网关，Tunnel 会暂停，重新开启网关后恢复。
 
 两种 Cloudflare 入口都只接受 `/ws/mobile` WebSocket，其他 HTTP 路径（包括 DSH WebUI 和 `/mgw` 管理接口）返回 404；设备凭证始终必需，即使本机 Debug 鉴权被关闭也一样。命名 Tunnel 的 Token 保存在 `<deviceFile>.cloudflare.json`（默认 `~/.dsh/mobile-gateway-devices.json.cloudflare.json`），权限为 `0600`，不会返回给浏览器。默认使用 DSH 私有的 `cloudflared-bin` 缓存，不读取系统或其他 App 的 `cloudflared`；每次启动 Tunnel 都校验缓存文件，只有缓存缺失或损坏时才下载固定版本并核对 Cloudflare 官方发布资产的 SHA-256。仅在显式配置 `cloudflaredPath` 时使用外部程序。使用自定义 `cloudflarePort` 时，命名 Tunnel 路由的 Service URL 端口也要相应修改。
 

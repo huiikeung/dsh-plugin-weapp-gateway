@@ -124,7 +124,7 @@ const seeds = [
   [{ id: 'd1', name: 'My Phone', online: true, connections: 2, lastSeenAt: 1758000000000 }], // devices
   {                                                                                          // status
     gatewayEnabled: true, gatewayMode: 'persistent', gatewayId: '9f1c-uuid', gatewayName: '家里电脑',
-    requireAuth: true, version: '0.7.11', webPort: 2298, wsPath: '/ws/mobile', publicUrl: '',
+    requireAuth: true, version: '0.7.12', webPort: 2298, wsPath: '/ws/mobile', publicUrl: '',
     platform: 'linux', webPid: 4321,
     tools: { restartWeb: true, stopWeb: true },
     cloudflare: { supported: false, enabled: false, state: 'disabled', port: 3082, configured: false },
@@ -185,7 +185,7 @@ for (const [needle, what] of [
   ['在线 · 2 个连接', 'device online badge'],
   ['>吊销<', 'revoke button present'],
   ['已刷新 · 10:00:00', 'refresh notice'],
-  ['v0.7.11', 'version footer'],
+  ['v0.7.12', 'version footer'],
   ['完成', 'close button'],
   ['连接模式', 'connection-mode group'],
   ['直连', 'direct option offered'],
@@ -311,6 +311,38 @@ for (const [needle, what] of [
   ['mgw-select-wrap', 'selects get the themed chevron wrapper'],
 ]) check(htmlE.includes(needle), what)
 check(htmlE.includes('Nginx'), 'linux public-access block stays visible on Linux')
+
+// ------------------------------------------- render F: named tunnel mode (Linux)
+// The named-tunnel form state: how to obtain the domain and Token, with the
+// two jumps to the Cloudflare dashboard and the official guide.
+console.log('\n=== render F: named tunnel mode ===')
+const cfNamedSeeds = JSON.parse(JSON.stringify(seeds))
+cfNamedSeeds[23] = () => new Set()
+cfNamedSeeds[3] = 'cloudflare'
+cfNamedSeeds[1].pairingMode = 'direct'
+cfNamedSeeds[1].relay = null
+cfNamedSeeds[1].platform = 'linux'
+cfNamedSeeds[12] = 'named'
+cfNamedSeeds[1].cloudflare = {
+  supported: true, enabled: false, mode: 'quick', state: 'disabled', port: 3082,
+  configured: false, hostname: '', publicUrl: null, error: '',
+}
+const cfNamedExported = loadBundle(seededReact(cfNamedSeeds)).factory((id) => {
+  if (id === 'react') return seededReact(cfNamedSeeds)
+  throw new Error(`unexpected require: ${id}`)
+})
+const cfNamedRegistrations = []
+cfNamedExported.apply({ slots: { inject: (n, t) => t(), register: (o, c) => { cfNamedRegistrations.push({ options: o, component: c }); return () => {} } } })
+const htmlF = renderToStaticMarkup(React.createElement(cfNamedRegistrations[0].component, { close: () => {} }))
+for (const [needle, what] of [
+  ['命名 Tunnel · 固定域名', 'named mode is the selected value'],
+  ['https://dash.cloudflare.com/?to=/:account/tunnels', 'dashboard jump link'],
+  ['create-remote-tunnel', 'official guide jump link'],
+  ['eyJ… 开头的一段', 'explains where the token comes from'],
+  ['http://127.0.0.1:3082', 'names the origin Service URL'],
+  ['开启命名 Tunnel', 'named enable action offered'],
+]) check(htmlF.includes(needle), what)
+check(htmlF.includes('mgw-link'), 'links carry the themed link class')
 
 // ------------------------------------------------------- source-level guarantees
 console.log('\n=== source guarantees ===')

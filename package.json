@@ -1,6 +1,6 @@
 {
   "name": "dsh-plugin-weapp-gateway",
-  "version": "0.7.11",
+  "version": "0.7.12",
   "description": "Authenticated mobile gateway for dsh 0.1.7-rc.2 with Session V4 history, live permissions, inbox-based queue sync, LAN and Cloudflare Tunnel access, device pairing, and per-session Agent preset selection",
   "main": "lib/index.mjs",
   "files": [
