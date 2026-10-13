@@ -92,7 +92,34 @@ function fakeSpawn() {
   check(snap.running === false && snap.lastError === null, 'exit 0 leaves no error (installed connector owns the identity)')
 }
 
-// 4) a crash schedules a restart, and repeated crashes give up
+// 4) a live lock holder means an installed connector owns the identity
+{
+  const stateDir = path.join(temp, 'locked')
+  fs.mkdirSync(stateDir, { recursive: true })
+  // pid 1 is alive and is definitely not this process, so it stands in for an
+  // installed connector that holds the identity.
+  fs.writeFileSync(path.join(stateDir, 'connector.lock'), `${JSON.stringify({ pid: 1 })}\n`)
+  const { spawnProcess, spawned } = fakeSpawn()
+  const supervisor = createRelayConnector({ relay: 'wss://r.example.com', stateDir, spawnProcess })
+  const snap = supervisor.start()
+  check(spawned.length === 0 && snap.running === false, 'no child is spawned while another connector holds the lock')
+  check(snap.delegatedTo === 1, 'the supervisor reports delegation instead of a failure')
+  supervisor.dispose()
+}
+
+// 5) a stale lock (dead pid) is taken over
+{
+  const stateDir = path.join(temp, 'stale')
+  fs.mkdirSync(stateDir, { recursive: true })
+  fs.writeFileSync(path.join(stateDir, 'connector.lock'), `${JSON.stringify({ pid: 999999 })}\n`)
+  const { spawnProcess, spawned } = fakeSpawn()
+  const supervisor = createRelayConnector({ relay: 'wss://r.example.com', stateDir, spawnProcess })
+  supervisor.start()
+  check(spawned.length === 1 && supervisor.snapshot().delegatedTo === null, 'a lock whose pid is gone is taken over')
+  supervisor.dispose()
+}
+
+// 6) a crash schedules a restart, and repeated crashes give up
 {
   const { spawnProcess, spawned } = fakeSpawn()
   let clock = 0
