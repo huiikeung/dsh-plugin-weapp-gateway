@@ -203,6 +203,8 @@ curl -sk -o /dev/null -w '%{http_code}\n' https://mdsh.zo1.top:16662/ws/mobile
 | 手机连的是 `127.0.0.1` | 面板里手填 `ws://192.168.3.110:3081/ws/mobile` |
 | 外网连不上 | 检查反代是否透传了 `Upgrade`/`Connection` 头、是否限定了 `/ws/mobile` 路径 |
 | 服务端日志 | `tail -f /tmp/mobile-gateway.log` |
+| Quick Tunnel 卡在「连接中」 | cloudflared 默认走 QUIC/UDP，本机网络屏蔽了到 Cloudflare 边缘的 UDP；v0.7.20 起已强制 `--protocol http2`，旧版本请手动加该参数 |
+| 小程序连上中继但不加载会话/工作区 | 先查 NAS 到中继的 TLS：`openssl s_client -connect relay.ahwe.top:443 -servername relay.ahwe.top`。若报 `unexpected eof`/`decode_error`，是本地 DNS 被污染（`getent hosts relay.ahwe.top` 会返回 198.19.0.143 这种不可路由的假地址）；用 DoH 取真实 IP 并写入 `/etc/hosts`：`curl -s "https://dns.google/resolve?name=relay.ahwe.top&type=A"`，然后把返回的 `data` 值按 `42.193.219.83 relay.ahwe.top` 的形式固定。VPS 换 IP 后需同步更新 |
 
 ---
 

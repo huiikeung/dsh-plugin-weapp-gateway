@@ -54,7 +54,9 @@ assert.equal(active.configured, true)
 await new Promise((resolve) => setImmediate(resolve))
 assert.equal(tunnel.snapshot().state, 'online')
 assert.equal(children.length, 1)
-assert.deepEqual(children[0].args, ['tunnel', '--no-autoupdate', '--loglevel', 'info', 'run'])
+// Fork: --protocol http2 is pinned because QUIC/UDP to Cloudflare's edge is
+// blocked on this network (the tunnel otherwise never leaves "connecting").
+assert.deepEqual(children[0].args, ['tunnel', '--no-autoupdate', '--loglevel', 'info', '--protocol', 'http2', 'run'])
 assert.equal(children[0].options.env.TUNNEL_TOKEN, token)
 assert.equal(children[0].args.join(' ').includes(token), false)
 assert.equal(fs.statSync(file).mode & 0o777, 0o600)

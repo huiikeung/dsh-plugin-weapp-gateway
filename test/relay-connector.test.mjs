@@ -76,7 +76,7 @@ function fakeSpawn() {
 // 2) refuses to start without a relay URL
 {
   const { spawnProcess, spawned } = fakeSpawn()
-  const supervisor = createRelayConnector({ relay: '', spawnProcess })
+  const supervisor = createRelayConnector({ relay: '', stateDir: path.join(temp, 'norelay'), spawnProcess })
   const snap = supervisor.start()
   check(spawned.length === 0 && snap.running === false, 'no relay URL means no spawn')
   check(/relayUrl/.test(snap.lastError || ''), 'the missing relay URL is reported for the panel')
@@ -85,7 +85,7 @@ function fakeSpawn() {
 // 3) a clean exit (pid lock held by an installed connector) is not a failure
 {
   const { spawnProcess, spawned } = fakeSpawn()
-  const supervisor = createRelayConnector({ relay: 'wss://r.example.com', spawnProcess })
+  const supervisor = createRelayConnector({ relay: 'wss://r.example.com', stateDir: path.join(temp, 'iso' + Math.random().toString(36).slice(2, 8)), spawnProcess })
   supervisor.start()
   spawned[0].handlers.exit(0, null)
   const snap = supervisor.snapshot()
@@ -123,7 +123,7 @@ function fakeSpawn() {
 {
   const { spawnProcess, spawned } = fakeSpawn()
   let clock = 0
-  const supervisor = createRelayConnector({ relay: 'wss://r.example.com', spawnProcess, now: () => clock, restartDelayMs: 20 })
+  const supervisor = createRelayConnector({ relay: 'wss://r.example.com', stateDir: path.join(temp, 'crash'), spawnProcess, now: () => clock, restartDelayMs: 20 })
   supervisor.start()
   spawned[0].handlers.exit(1, null)
   check(supervisor.snapshot().lastError === '内置连接器退出（1）', 'a nonzero exit is reported')

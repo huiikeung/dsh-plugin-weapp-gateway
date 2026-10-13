@@ -126,7 +126,7 @@ const seeds = [
   ], // devices
   {                                                                                          // status
     gatewayEnabled: true, gatewayMode: 'persistent', gatewayId: '9f1c-uuid', gatewayName: '家里电脑',
-    requireAuth: true, version: '0.7.19', webPort: 2298, wsPath: '/ws/mobile', publicUrl: '', gatewayInstanceId: 'gi-abc',
+    requireAuth: true, version: '0.7.20', webPort: 2298, wsPath: '/ws/mobile', publicUrl: '', gatewayInstanceId: 'gi-abc',
     platform: 'linux', webPid: 4321,
     tools: { restartWeb: true, stopWeb: true },
     cloudflare: { supported: false, enabled: false, state: 'disabled', port: 3082, configured: false },
@@ -193,7 +193,7 @@ for (const [needle, what] of [
   ['My Phone (2)', 'duplicate device names are numbered via displayName'],
   ['>吊销<', 'revoke button present'],
   ['已刷新 · 10:00:00', 'refresh notice'],
-  ['v0.7.19', 'version footer'],
+  ['v0.7.20', 'version footer'],
   ['完成', 'close button'],
   ['连接模式', 'connection-mode group'],
   ['直连', 'direct option offered'],
