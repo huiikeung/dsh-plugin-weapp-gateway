@@ -27,6 +27,9 @@
         lanEnabled: true
         lanHost: 0.0.0.0
         lanPort: 3081
+        # 中继模式（微信小程序）的 VPS 中继地址。留空时沿用已注册连接器上报的
+        # 地址；都没有则内置连接器无法启动，面板会提示。
+        relayUrl: wss://relay.ahwe.top
         # The UI can enable Quick or named Cloudflare Tunnel. Both use a
         # separate authenticated loopback-only mobile endpoint. PC keeps the
         # managed checksummed download; on Linux cloudflared is installed from
