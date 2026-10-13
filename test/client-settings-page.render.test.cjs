@@ -127,7 +127,7 @@ const seeds = [
   ], // devices
   {                                                                                          // status
     gatewayEnabled: true, gatewayMode: 'persistent', gatewayId: '9f1c-uuid', gatewayName: '家里电脑',
-    requireAuth: true, version: '0.7.14', webPort: 2298, wsPath: '/ws/mobile', publicUrl: '', gatewayInstanceId: 'gi-abc',
+    requireAuth: true, version: '0.7.15', webPort: 2298, wsPath: '/ws/mobile', publicUrl: '', gatewayInstanceId: 'gi-abc',
     platform: 'linux', webPid: 4321,
     tools: { restartWeb: true, stopWeb: true },
     cloudflare: { supported: false, enabled: false, state: 'disabled', port: 3082, configured: false },
@@ -154,6 +154,8 @@ const seeds = [
   false,                                                                                     // cloudflareBusy
   'Pixel',                                                                                   // deviceName
   { svg: '<svg/>', qrPayload: 'PAYLOAD-TOKEN', pairing: { expiresAt: 1758003600000 } },      // qr
+  'general',                                                                                 // activeSection
+  false,                                                                                     // pairingClosing
   null,                                                                                      // error
   false,                                                                                     // busy
   false,                                                                                     // refreshing
@@ -162,6 +164,8 @@ const seeds = [
   null,                                                                                      // deviceNotice
   false,                                                                                     // deviceNoticeError
   () => new Set(),                                                                           // revokingIds
+  false,                                                                                     // showAllDevices
+  null,                                                                                      // dismissedNotice
 ]
 const exportedB = loadBundle(seededReact(seeds)).factory((id) => {
   if (id === 'react') return seededReact(seeds)
@@ -189,7 +193,7 @@ for (const [needle, what] of [
   ['My Phone (2)', 'duplicate device names are numbered via displayName'],
   ['>吊销<', 'revoke button present'],
   ['已刷新 · 10:00:00', 'refresh notice'],
-  ['v0.7.14', 'version footer'],
+  ['v0.7.15', 'version footer'],
   ['完成', 'close button'],
   ['连接模式', 'connection-mode group'],
   ['直连', 'direct option offered'],
@@ -230,7 +234,7 @@ console.log('\n=== render C: populated, direct mode ===')
 const directSeeds = JSON.parse(JSON.stringify(seeds))
 directSeeds[1].pairingMode = 'direct'
 directSeeds[1].relay = null
-directSeeds[23] = () => new Set()
+directSeeds[25] = () => new Set()
 const directRegistrations = []
 const directExported = loadBundle(seededReact(directSeeds)).factory((id) => {
   if (id === 'react') return seededReact(directSeeds)
@@ -257,7 +261,7 @@ for (const needle of ['wss://relay.ahwe.top', 'nodeId ecb2de50', 'agentPubKey nU
 // platform gate that hides the Linux public-access block.
 console.log('\n=== render D: Cloudflare tunnel (PC) ===')
 const cfSeeds = JSON.parse(JSON.stringify(seeds))
-cfSeeds[23] = () => new Set()
+cfSeeds[25] = () => new Set()
 cfSeeds[3] = 'cloudflare'
 cfSeeds[1].pairingMode = 'direct'
 cfSeeds[1].relay = null
@@ -294,7 +298,7 @@ check(!htmlD.includes('Linux 服务器不自动下载'), 'PC shows the managed-d
 // install instructions and the Linux public-access block comes back.
 console.log('\n=== render E: Cloudflare tunnel (Linux) ===')
 const cfLinuxSeeds = JSON.parse(JSON.stringify(seeds))
-cfLinuxSeeds[23] = () => new Set()
+cfLinuxSeeds[25] = () => new Set()
 cfLinuxSeeds[3] = 'cloudflare'
 cfLinuxSeeds[1].pairingMode = 'direct'
 cfLinuxSeeds[1].relay = null
@@ -328,7 +332,7 @@ check(htmlE.includes('Nginx'), 'linux public-access block stays visible on Linux
 // two jumps to the Cloudflare dashboard and the official guide.
 console.log('\n=== render F: named tunnel mode ===')
 const cfNamedSeeds = JSON.parse(JSON.stringify(seeds))
-cfNamedSeeds[23] = () => new Set()
+cfNamedSeeds[25] = () => new Set()
 cfNamedSeeds[3] = 'cloudflare'
 cfNamedSeeds[1].pairingMode = 'direct'
 cfNamedSeeds[1].relay = null
@@ -360,7 +364,8 @@ console.log('\n=== source guarantees ===')
 check(!src.includes('sidebar.footer.action'), 'no sidebar.footer.action contribution')
 check(!src.includes('shell.overlay'), 'no shell.overlay contribution')
 const injectedCss = /const CSS = `([\s\S]*?)`/.exec(src)?.[1] || ''
-check(!injectedCss.includes('position:fixed'), 'no fixed-position (floating) styling in the injected stylesheet')
+check((injectedCss.match(/position:fixed/g) || []).length === 1 && injectedCss.includes('.mgw-pairing-backdrop{position:fixed'),
+  'fixed positioning is limited to the pairing modal')
 check(!src.includes('sidebar.footer.action'), 'no sidebar footer action re-added alongside the custom Select')
 check(src.includes("id: 'mobile-gateway'"), 'registers the mobile-gateway settings section')
 check(src.includes('function apiPath') && src.includes('document.baseURI')
