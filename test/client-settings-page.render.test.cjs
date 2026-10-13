@@ -126,7 +126,7 @@ const seeds = [
   ], // devices
   {                                                                                          // status
     gatewayEnabled: true, gatewayMode: 'persistent', gatewayId: '9f1c-uuid', gatewayName: '家里电脑',
-    requireAuth: true, version: '0.7.17', webPort: 2298, wsPath: '/ws/mobile', publicUrl: '', gatewayInstanceId: 'gi-abc',
+    requireAuth: true, version: '0.7.18', webPort: 2298, wsPath: '/ws/mobile', publicUrl: '', gatewayInstanceId: 'gi-abc',
     platform: 'linux', webPid: 4321,
     tools: { restartWeb: true, stopWeb: true },
     cloudflare: { supported: false, enabled: false, state: 'disabled', port: 3082, configured: false },
@@ -151,7 +151,6 @@ const seeds = [
   '',                                                                                        // cloudflareToken
   'quick',                                                                                   // cloudflareMode
   false,                                                                                     // cloudflareBusy
-  'Pixel',                                                                                   // deviceName
   { svg: '<svg/>', qrPayload: 'PAYLOAD-TOKEN', pairing: { expiresAt: 1758003600000 } },      // qr
   'general',                                                                                 // activeSection
   false,                                                                                     // pairingClosing
@@ -183,7 +182,9 @@ for (const [needle, what] of [
   ['局域网入口已开启：ws://192.168.3.110:3081/ws/mobile', 'lan listening status'],
   ['已配置，Nginx 转发至 DSH 端口 2298', 'public setup configured'],
   ['wss://mdsh.zo1.top:16662/ws/mobile', 'public url'],
-  ['value="Pixel"', 'device name value'],
+  ['说明', 'explanations live in a bottom info card'],
+  ['配对码仅可使用一次，5 分钟内有效；扫码成功后立即失效。', 'pairing-code rule in the info card'],
+  ['微信小程序只能连接已备案域名且基本限于 443 端口', 'mini-program relay rule in the info card'],
   ['生成配对二维码', 'pair button enabled label'],
   ['PAYLOAD-TOKEN', 'pairing payload textarea'],
   ['✓ 已复制', 'copied state'],
@@ -192,7 +193,7 @@ for (const [needle, what] of [
   ['My Phone (2)', 'duplicate device names are numbered via displayName'],
   ['>吊销<', 'revoke button present'],
   ['已刷新 · 10:00:00', 'refresh notice'],
-  ['v0.7.17', 'version footer'],
+  ['v0.7.18', 'version footer'],
   ['完成', 'close button'],
   ['连接模式', 'connection-mode group'],
   ['直连', 'direct option offered'],
@@ -205,8 +206,6 @@ for (const [needle, what] of [
   ['小程序只能连接已配置的域名、且基本限于 443 端口', 'relay mode explains why a public direct URL is unreachable'],
   ['中继链路已验证可用', 'relay warning states the backend is proven'],
   ['mgw-callout', 'the hint gets a rounded callout background'],
-  ['留空自动识别手机型号', 'relay placeholder no longer suggests iPhone'],
-  ['留空时由本机连接器按所连接手机的型号自动命名', 'relay device-name hint explains auto-naming'],
   ['连接地址（二维码指向这里）', 'relay mode leads the address group with the relay'],
   ['wss://relay.ahwe.top', 'relay address shown as the connection address'],
   ['网关地址（仅透传给小程序）', 'relay mode demotes the ws field to informational'],
@@ -232,7 +231,7 @@ console.log('\n=== render C: populated, direct mode ===')
 const directSeeds = JSON.parse(JSON.stringify(seeds))
 directSeeds[1].pairingMode = 'direct'
 directSeeds[1].relay = null
-directSeeds[25] = () => new Set()
+directSeeds[24] = () => new Set()
 const directRegistrations = []
 const directExported = loadBundle(seededReact(directSeeds)).factory((id) => {
   if (id === 'react') return seededReact(directSeeds)
@@ -262,7 +261,7 @@ for (const needle of ['wss://relay.ahwe.top', 'nodeId ecb2de50', 'agentPubKey nU
 // platform gate that hides the Linux public-access block.
 console.log('\n=== render D: Cloudflare tunnel (PC) ===')
 const cfSeeds = JSON.parse(JSON.stringify(seeds))
-cfSeeds[25] = () => new Set()
+cfSeeds[24] = () => new Set()
 cfSeeds[3] = 'cloudflare'
 cfSeeds[1].pairingMode = 'direct'
 cfSeeds[1].relay = null
@@ -299,7 +298,7 @@ check(!htmlD.includes('Linux 服务器不自动下载'), 'PC shows the managed-d
 // install instructions and the Linux public-access block comes back.
 console.log('\n=== render E: Cloudflare tunnel (Linux) ===')
 const cfLinuxSeeds = JSON.parse(JSON.stringify(seeds))
-cfLinuxSeeds[25] = () => new Set()
+cfLinuxSeeds[24] = () => new Set()
 cfLinuxSeeds[3] = 'cloudflare'
 cfLinuxSeeds[1].pairingMode = 'direct'
 cfLinuxSeeds[1].relay = null
@@ -333,7 +332,7 @@ check(htmlE.includes('Nginx'), 'linux public-access block stays visible on Linux
 // two jumps to the Cloudflare dashboard and the official guide.
 console.log('\n=== render F: named tunnel mode ===')
 const cfNamedSeeds = JSON.parse(JSON.stringify(seeds))
-cfNamedSeeds[25] = () => new Set()
+cfNamedSeeds[24] = () => new Set()
 cfNamedSeeds[3] = 'cloudflare'
 cfNamedSeeds[1].pairingMode = 'direct'
 cfNamedSeeds[1].relay = null
@@ -378,7 +377,7 @@ check(src.includes("'Quick Tunnel · 无需域名'") && src.includes("'命名 Tu
 check(src.includes("addEventListener('pointerdown', onPointerDown)") && src.includes("if (event.key === 'Escape') close(true)"),
   'custom Select closes on Escape and on outside pointerdown')
 check(!src.includes("createElement('select'"), 'no native select left in the panel')
-check(src.includes("'X-DSH-Device-Name'") && !src.includes("JSON.stringify({ name: deviceName"), 'pairing sends the device name as a header, not a body field')
+check(src.includes("JSON.stringify({ publicUrl: endpoint })") && !src.includes('deviceName'), 'pairing body carries only publicUrl; the device-name field is gone')
 check(src.includes('/mgw/cloudflare/check') && src.includes('/mgw/cloudflare/restart'), 'cloudflare check/restart routes wired')
 check(src.includes('tunnel.publicReady === true'), 'connection advice trusts publicReady, not raw tunnel state')
 
