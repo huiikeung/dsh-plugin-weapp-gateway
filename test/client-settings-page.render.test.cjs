@@ -121,10 +121,13 @@ check(!htmlA.includes('正在检查系统组件…'), 'public access stays hidde
 // ---------------------------------------------------------- render B: populated
 console.log('\n=== render B: populated state ===')
 const seeds = [
-  [{ id: 'd1', name: 'My Phone', online: true, connections: 2, lastSeenAt: 1758000000000 }], // devices
+  [
+    { id: 'd1', name: 'My Phone', displayName: 'My Phone (2)', online: true, connections: 2, lastSeenAt: 1758000000000 },
+    { id: 'd2', name: 'My Phone', displayName: 'My Phone (1)', online: false, connections: 0, lastSeenAt: 1757900000000 },
+  ], // devices
   {                                                                                          // status
     gatewayEnabled: true, gatewayMode: 'persistent', gatewayId: '9f1c-uuid', gatewayName: '家里电脑',
-    requireAuth: true, version: '0.7.13', webPort: 2298, wsPath: '/ws/mobile', publicUrl: '',
+    requireAuth: true, version: '0.7.14', webPort: 2298, wsPath: '/ws/mobile', publicUrl: '', gatewayInstanceId: 'gi-abc',
     platform: 'linux', webPid: 4321,
     tools: { restartWeb: true, stopWeb: true },
     cloudflare: { supported: false, enabled: false, state: 'disabled', port: 3082, configured: false },
@@ -182,10 +185,11 @@ for (const [needle, what] of [
   ['PAYLOAD-TOKEN', 'pairing payload textarea'],
   ['✓ 已复制', 'copied state'],
   ['My Phone', 'device row name'],
-  ['在线 · 2 个连接', 'device online badge'],
+  ['在线', 'device online badge (upstream simplified it)'],
+  ['My Phone (2)', 'duplicate device names are numbered via displayName'],
   ['>吊销<', 'revoke button present'],
   ['已刷新 · 10:00:00', 'refresh notice'],
-  ['v0.7.13', 'version footer'],
+  ['v0.7.14', 'version footer'],
   ['完成', 'close button'],
   ['连接模式', 'connection-mode group'],
   ['直连', 'direct option offered'],
@@ -205,6 +209,8 @@ for (const [needle, what] of [
   ['网关地址（仅透传给小程序）', 'relay mode demotes the ws field to informational'],
   ['中继模式下小程序不直连它', 'explains the demotion'],
   ['公网接入（中继模式下只影响上面透传的网关地址）', 'public-access label explains its reduced scope'],
+  ['若安装或更新后连接异常，请重启应用', 'restart notice shown for the current gateway instance'],
+  ['展开其他已配对设备（1）', 'offline devices collapse behind a toggle'],
   ['维护工具', 'maintenance tools card rendered'],
   ['重启 DSH Web', 'restart tool offered'],
   ['停止 DSH Web', 'stop tool offered'],
@@ -260,6 +266,8 @@ cfSeeds[1].tools = { restartWeb: false, stopWeb: false }
 cfSeeds[1].cloudflare = {
   supported: true, enabled: true, mode: 'quick', state: 'online', port: 3082,
   configured: false, hostname: '', publicUrl: 'wss://quiet-storm-42.trycloudflare.com', error: '',
+  publicReady: true,
+  endpointHealth: { state: 'reachable', message: 'TLS 校验通过，移动网关路由已确认且要求鉴权。', checkedAt: '2026-10-13T01:00:00.000Z' },
 }
 const cfExported = loadBundle(seededReact(cfSeeds)).factory((id) => {
   if (id === 'react') return seededReact(cfSeeds)
@@ -276,6 +284,7 @@ for (const [needle, what] of [
   ['已连接 Cloudflare · wss://quiet-storm-42.trycloudflare.com', 'tunnel state and public url shown'],
   ['Cloudflare 外网', 'cloudflare pairing route label in the trigger while enabled'],
   ['当前不是通过 dsh web 启动的 Web profile', 'tools availability explained'],
+  ['TLS 校验通过，移动网关路由已确认且要求鉴权。', 'endpoint health message shown when reachable'],
 ]) check(htmlD.includes(needle), what)
 check(!htmlD.includes('Nginx'), 'linux public-access block hidden on PC')
 check(!htmlD.includes('Linux 服务器不自动下载'), 'PC shows the managed-download note, not the Linux one')
@@ -306,6 +315,8 @@ for (const [needle, what] of [
   ['Linux 服务器不自动下载', 'linux card explains the manual install'],
   ['pkg.cloudflare.com', 'linux card names the official package source'],
   ['一键开启 Quick Tunnel', 'quick tunnel can be started from Linux'],
+  ['检测公网 DNS / TLS / WebSocket', 'public endpoint check action offered'],
+  ['重启 Tunnel', 'tunnel restart action offered'],
   ['未开启', 'tunnel idle state shown'],
   ['Cloudflare 外网（未开启）', 'cloudflare pairing route stays listed while the tunnel is off'],
   ['mgw-select-wrap', 'selects get the themed chevron wrapper'],
@@ -348,7 +359,8 @@ check(htmlF.includes('mgw-link'), 'links carry the themed link class')
 console.log('\n=== source guarantees ===')
 check(!src.includes('sidebar.footer.action'), 'no sidebar.footer.action contribution')
 check(!src.includes('shell.overlay'), 'no shell.overlay contribution')
-check(!src.includes('position:fixed'), 'no fixed-position (floating) styling')
+const injectedCss = /const CSS = `([\s\S]*?)`/.exec(src)?.[1] || ''
+check(!injectedCss.includes('position:fixed'), 'no fixed-position (floating) styling in the injected stylesheet')
 check(!src.includes('sidebar.footer.action'), 'no sidebar footer action re-added alongside the custom Select')
 check(src.includes("id: 'mobile-gateway'"), 'registers the mobile-gateway settings section')
 check(src.includes('function apiPath') && src.includes('document.baseURI')
@@ -357,9 +369,12 @@ check(src.includes("'/mgw/cloudflare'") && src.includes('/mgw/tools/') && src.in
   'cloudflare tunnel, web tools and pairing routes wired')
 check(src.includes("'Quick Tunnel · 无需域名'") && src.includes("'命名 Tunnel · 固定域名'") && src.includes("'手动输入地址'"),
   'custom Select offers cloudflare modes and the custom route')
-check(src.includes("keydown', onKeyDown") && src.includes("if (event.key === 'Escape') setOpen(false)"),
-  'custom Select closes on Escape and on outside mousedown')
+check(src.includes("addEventListener('pointerdown', onPointerDown)") && src.includes("if (event.key === 'Escape') close(true)"),
+  'custom Select closes on Escape and on outside pointerdown')
 check(!src.includes("createElement('select'"), 'no native select left in the panel')
+check(src.includes("'X-DSH-Device-Name'") && !src.includes("JSON.stringify({ name: deviceName"), 'pairing sends the device name as a header, not a body field')
+check(src.includes('/mgw/cloudflare/check') && src.includes('/mgw/cloudflare/restart'), 'cloudflare check/restart routes wired')
+check(src.includes('tunnel.publicReady === true'), 'connection advice trusts publicReady, not raw tunnel state')
 
 console.log(`\nhtml A: ${htmlA.length} bytes · html B: ${htmlB.length} bytes · html C: ${htmlC.length} bytes · html D: ${htmlD.length} bytes · html E: ${htmlE.length} bytes`)
 if (failed) { console.error(`\n${failed} check(s) FAILED`); process.exit(1) }

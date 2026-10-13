@@ -53,7 +53,7 @@ function expectRejected(url, options = {}) {
   const firstDeviceId = claimed.device.id
   const firstToken = claimed.token
   const secondPairing = registry.createPairing('Renamed Test iPhone')
-  claimed = registry.claimPairing(secondPairing.code, clientDeviceId)
+  claimed = registry.claimPairing(secondPairing.code, clientDeviceId, 'Renamed Test iPhone')
   assert.equal(claimed.device.id, firstDeviceId)
   assert.equal(registry.list().length, 1)
   assert.equal(registry.list()[0].name, 'Renamed Test iPhone')
@@ -69,6 +69,18 @@ function expectRejected(url, options = {}) {
   assert.equal(registry.list()[0].online, false)
   assert.equal(registry.revoke(claimed.device.id), true)
   assert.equal(registry.authenticate(claimed.token), undefined)
+
+  const firstNamed = registry.claimPairing(registry.createPairing('Ignored desktop name').code, 'named-device-001', '我的手机')
+  const secondNamed = registry.claimPairing(registry.createPairing().code, 'named-device-002', '我的手机')
+  assert.deepEqual(registry.list().map((device) => device.displayName), ['我的手机 (1)', '我的手机 (2)'])
+  assert.equal(registry.list()[0].name, '我的手机')
+  registry.authenticate(firstNamed.token, 'named-device-001', '新名称')
+  assert.deepEqual(registry.list().map((device) => device.displayName), ['新名称', '我的手机'])
+  registry.revoke(firstNamed.device.id)
+  registry.revoke(secondNamed.device.id)
+  const unnamed = registry.claimPairing(registry.createPairing('Ignored desktop name').code, 'unnamed-device-001')
+  assert.equal(unnamed.device.name, '未命名设备')
+  registry.revoke(unnamed.device.id)
 
   let managementRoute
   let upgradeRoute
@@ -248,6 +260,7 @@ function expectRejected(url, options = {}) {
     'tasks',
     'goals',
     'schedule-management',
+    'plugin-management-v1',
     'session-cancel',
     'queue-control',
     'session-archive',
@@ -286,7 +299,7 @@ function expectRejected(url, options = {}) {
   const rePairedSocket = new WebSocket(
     wsUrl,
     ['dsh-mobile-v1', `dsh-pair.${rePairBody.payload.pairingCode}`],
-    { headers: { 'X-DSH-Device-ID': clientDeviceId } },
+    { headers: { 'X-DSH-Device-ID': clientDeviceId, 'X-DSH-Device-Name': Buffer.from('Integration iPhone Renamed').toString('base64') } },
   )
   const rePairedPromise = waitForMessage(rePairedSocket, 'paired')
   await once(rePairedSocket, 'open')
@@ -373,14 +386,19 @@ function expectRejected(url, options = {}) {
   const renamePairResponse = await fetch(`${base}/mgw/pair`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Origin: base },
-    body: JSON.stringify({ name: 'Rename Probe', publicUrl: wsUrl }),
+    body: JSON.stringify({ publicUrl: wsUrl }),
   })
   assert.equal(renamePairResponse.status, 201)
   const renameCode = (await renamePairResponse.json()).payload.pairingCode
+  // Upstream protocol: the device name travels in the X-DSH-Device-Name
+  // header (base64), not in the pairing body.
   const renameSocket = new WebSocket(
     wsUrl,
     ['dsh-mobile-v1', `dsh-pair.${renameCode}`],
-    { headers: { 'X-DSH-Device-ID': `${clientDeviceId}-rename` } },
+    { headers: {
+      'X-DSH-Device-ID': `${clientDeviceId}-rename`,
+      'X-DSH-Device-Name': Buffer.from('Rename Probe').toString('base64'),
+    } },
   )
   const renamePaired = await waitForMessage(renameSocket, 'paired')
   const renameDeviceId = renamePaired.device.id

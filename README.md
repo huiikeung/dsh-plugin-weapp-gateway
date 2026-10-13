@@ -6,12 +6,13 @@
 
 DeepSeek Harness 的设备鉴权移动网关，支持会话与实时事件、排队消息同步及编辑/删除/Steer、Session 归档和重命名的双向同步、停止当前生成并稍后继续、任务列表和当前 Goal 同步及管理、服务端驱动的命令和技能菜单、Human-in-the-loop、图片及文件传输。本 fork 不占用侧边栏：全部管理能力集中在 Harness WebUI 的「设置 → 移动设备」页面，可直接开启网关、生成配对二维码和管理可信设备；离开该页面即停止轮询，不再有任何悬浮层。
 
-> 当前源码以 **DSH 0.1.7-rc.2** 为适配基线，使用 Session format 4；旧版历史游标需重新取得基线。
+> 当前源码以 **DSH 0.2.0-rc.2** 为适配基线，使用 Session format 4；旧版历史游标需重新取得基线。
 >
 > 实时流已改为独立 `assistant-stream` 帧，移动端需要按 [rc.2 接入说明](docs/dsh-rc2-mobile-integration.md) 更新订阅、缓存与分页处理。当前修改尚未发布。
 >
 > v0.7.7：同步上游 v0.8.0（DSH 0.1.7-rc.2 / Session format 4、inbox 排队消息同步、Schedule 与 Permission Presets、审批 `displayReason`），管理界面仅保留在「设置 → 移动设备」，不再提供侧边栏入口。
 >
+> v0.7.14：同步上游 v0.9.0/v0.10.0——新增 DSH 0.2.0 插件管理 wire 协议（`plugin-management.mjs`，经配对设备连接管理插件目录/安装/启停/设置/版本豁免，需 0.2.0 宿主，0.1.7 上优雅降级）、Cloudflare 公网入口健康检测（`endpointHealth`/`publicReady` 区分「隧道已连」与「公网可达」）、隧道重启、设备名改由 `X-DSH-Device-Name` header 上报、同名设备编号、设备列表默认只看在线、下拉增强（fixed 定位 + 完整键盘导航）与重启提醒；面板继续保留在「设置 → 移动设备」。>
 > v0.7.8：同步上游 v0.8.1（PC 端可开启 Cloudflare Quick / 命名 Tunnel、配对面板增加局域网与外网入口选择指引、工具菜单可重启网关或停止 DSH Web），管理界面仅保留在「设置 → 移动设备」。
 >
 > v0.7.9：Cloudflare Tunnel 扩展到 Linux 服务器（本 fork 定制）：上游仅支持 Windows/macOS 自动下载校验 `cloudflared`，本 fork 允许在 Linux 上使用 Cloudflare 官方 apt 源安装的 `cloudflared`（或配置 `cloudflaredPath` 指向任意可执行文件），隧道机制不变。
@@ -29,7 +30,7 @@ DeepSeek Harness 的设备鉴权移动网关，支持会话与实时事件、排
 
 ## 协议与 DSH 兼容层
 
-移动端连接的是本项目维护的 `dsh-mobile-v1`，不是 DSH 的内部 Remote 协议。插件内部通过独立 Host Adapter 对接 DSH 0.1.7-rc.2 的 Remote Gateway；Session、Workspace、Settings、Commands、Goals、Schedule、Permission Presets 等 namespace 和严格参数只存在于该适配层。
+移动端连接的是本项目维护的 `dsh-mobile-v1`，不是 DSH 的内部 Remote 协议。插件内部通过独立 Host Adapter 对接 DSH 0.1.7-rc.2 的 Remote Gateway；Session、Workspace、Settings、Commands、Goals、Schedule、Permission Presets 等 namespace 和严格参数只存在于该适配层。上游 v0.9.0 起新增 Plugin Manager 系列请求帧（经配对设备连接管理插件目录、安装、启停、设置与版本豁免），该组 namespace 只在 DSH 0.2.0 宿主存在：本 fork 已同步协议与实现，在 0.1.7-rc.2 宿主上会返回「管理不可用」而不影响其他功能。请求帧方案见 [DSH 0.2.0 插件管理对接方案](docs/dsh-0.2.0-rc.2-plugin-management-mobile-integration.md)。
 
 配对鉴权和 `dsh-mobile-v1` / `hello.protocol = 3` 保持不变。新版实时 token 不占用持久事件的 `seq`：客户端显式订阅 `assistantStream: true`，接收原子的 `session-snapshot` 和独立增量；普通 `event` 只携带持久事件。未接入新订阅的客户端只能收到持久消息。
 
@@ -206,6 +207,8 @@ http://127.0.0.1:<本地端口>
 
 Quick Tunnel 无需 Cloudflare 账户、Token 或自己的公网域名，但地址在 DSH 重启或隧道重连后可能变化。手机 App 只信任已确认的地址，因此地址变化后需在面板重新生成二维码并扫码更新配对；**仅凭 PC 在线不能保证旧地址继续可用**。Cloudflare 将 Quick Tunnel 定位于测试和开发，当前有并发请求上限且不提供可用性保证。参见 [Cloudflare Quick Tunnel 文档](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/do-more-with-tunnels/trycloudflare/)。
 
+面板中的“更新 Tunnel 配置”保存所选模式及命名 Tunnel 参数；配置不变时不会重新连接。“重启 Tunnel”会断开当前移动连接并重建 Cloudflare 隧道，不会重启 DSH Web；Quick Tunnel 重启后可能取得新地址，旧二维码会清除，需按新地址重新扫码。此操作不会自动升级 `cloudflared` 到最新版本。
+
 ### Cloudflare 命名 Tunnel（固定地址）
 
 面板（「移动设备 → Cloudflare Tunnel」选「命名 Tunnel」）里内置了两个跳转链接：
@@ -235,6 +238,14 @@ apt-get update && apt-get install -y cloudflared
 ```
 
 安装后「移动设备 → Cloudflare Tunnel」分组即出现在面板（与 Windows/macOS 相同）。插件按以下顺序定位程序：profile 配置里的 `cloudflaredPath`（绝对路径优先），否则在 PATH 中查找 `cloudflared`；都不存在时面板会提示上面的安装命令。其余行为（Quick / 命名模式、配对地址自动填入、Token 保存、`/ws/mobile` 之外一律 404）与 PC 完全一致；Linux 同样不会监听 DSH WebUI 或 `/mgw` 的对外路径。
+
+#### 公网入口检测与状态含义
+
+`state: online` 只表示 cloudflared 已注册隧道连接，不保证公开域名、TLS 或源站路由可用。状态 API 另外提供 `endpointHealth`（状态、提示、检测时间及错误码）和 `publicReady`。面板在连接后自动检测一次，也可点击「检测公网 DNS / TLS / WebSocket」重试；该按钮调用受现有管理鉴权保护的 `POST /mgw/cloudflare/check`，不会重启隧道。
+
+检测使用本机系统 DNS 和严格证书校验的 HTTPS WebSocket 请求，不携带配对码或设备 Token，不跟随重定向。只有 HTTP 401 且移动网关回显本次随机探测标记时，才确认受鉴权保护的网关路由可达；代理或 Cloudflare Access 的普通 401 不会被当作成功。该标记只在缺少有效设备凭证的拒绝响应中回显，不授予任何访问权限。结果是一次本机网络快照，不保证手机网络、设备鉴权或会话同步成功。
+
+本机解析失败不代表公共 DNS 记录必然不存在：刚创建记录时可能仍有 NXDOMAIN 缓存，也可能受本机 DNS、VPN 或代理影响。核对公开主机名和已代理 CNAME，再稍后重试，不要关闭 TLS 校验。插件目前使用 Tunnel Token 运行远程管理的隧道，该 Token 不会自动创建域名路由或 DNS；具备额外账户授权的 cloudflared CLI / Cloudflare API 可以配置这些资源，但不属于本检测功能。
 
 ### Tailscale（推荐长期使用）
 

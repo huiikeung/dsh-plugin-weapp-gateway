@@ -193,6 +193,23 @@ async function waitForLanStatus(base) {
     assert.equal((await fetch(`http://127.0.0.1:${cloudflarePort}/mgw/status`)).status, 404)
     // The main listener's Debug switch is off, but the tunnel still requires a device.
     assert.equal(await expectRejected(tunnelUrl), 401)
+    const nonce = 'a'.repeat(32)
+    const probeHeaders = await new Promise((resolve, reject) => {
+      const ws = new WebSocket(tunnelUrl, { headers: { 'X-DSH-Gateway-Probe': nonce } })
+      ws.once('open', () => reject(new Error('probe must not authenticate')))
+      ws.once('unexpected-response', (_request, response) => {
+        assert.equal(response.statusCode, 401)
+        resolve(response.headers)
+        response.destroy()
+      })
+      ws.on('error', () => {})
+    })
+    assert.equal(probeHeaders['x-dsh-gateway-probe'], nonce)
+    const checked = await fetch(`${base}/mgw/cloudflare/check`, { method: 'POST', headers: { Origin: base } })
+    assert.equal(checked.status, 200)
+    assert.equal(typeof (await checked.json()).publicReady, 'boolean')
+    const forbiddenCheck = await fetch(`${base}/mgw/cloudflare/check`, { method: 'POST', headers: { Origin: 'https://other.example' } })
+    assert.equal(forbiddenCheck.status, 403)
     const tunnelClient = new WebSocket(tunnelUrl, {
       headers: { Authorization: `Bearer ${paired.token}`, 'X-DSH-Device-ID': deviceId },
     })
@@ -228,6 +245,18 @@ async function waitForLanStatus(base) {
     assert.equal(quickStatus.cloudflare.publicUrl, 'wss://sample-quick.trycloudflare.com/ws/mobile')
     assert.equal(quickStatus.publicUrl, quickStatus.cloudflare.publicUrl)
     assert.equal(quickStatus.endpoints.includes(quickStatus.cloudflare.publicUrl), true)
+    const restarted = await fetch(`${base}/mgw/cloudflare/restart`, {
+      method: 'POST', headers: { Origin: base },
+    })
+    assert.equal(restarted.status, 200)
+    assert.equal((await restarted.json()).enabled, true)
+    let reconnected = false
+    for (let attempt = 0; attempt < 50; attempt += 1) {
+      const current = await (await fetch(`${base}/mgw/status`)).json()
+      if (current.cloudflare.state === 'online') { reconnected = true; break }
+      await new Promise((resolve) => setTimeout(resolve, 20))
+    }
+    assert.equal(reconnected, true)
     const lanPairResponse = await fetch(`${base}/mgw/pair`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Origin: base },
@@ -246,6 +275,10 @@ async function waitForLanStatus(base) {
     })
     assert.equal(disabled.status, 200)
     assert.equal((await disabled.json()).enabled, false)
+    const rejectedRestart = await fetch(`${base}/mgw/cloudflare/restart`, {
+      method: 'POST', headers: { Origin: base },
+    })
+    assert.equal(rejectedRestart.status, 409)
   }
 
   ws.close()
