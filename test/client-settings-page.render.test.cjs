@@ -113,7 +113,6 @@ for (const [needle, what] of [
   ['WebSocket 地址', 'ws url field'],
   ['可信设备', 'trusted devices group'],
   ['WebSocket 地址（二维码指向这里）', 'direct mode labels the ws field as the QR target'],
-  ['配对连接方式', 'pairing route selector rendered'],
   ['维护工具', 'maintenance tools card rendered'],
 ]) check(htmlA.includes(needle), what)
 check(!htmlA.includes('正在检查系统组件…'), 'public access stays hidden while status is loading')
@@ -127,7 +126,7 @@ const seeds = [
   ], // devices
   {                                                                                          // status
     gatewayEnabled: true, gatewayMode: 'persistent', gatewayId: '9f1c-uuid', gatewayName: '家里电脑',
-    requireAuth: true, version: '0.7.15', webPort: 2298, wsPath: '/ws/mobile', publicUrl: '', gatewayInstanceId: 'gi-abc',
+    requireAuth: true, version: '0.7.16', webPort: 2298, wsPath: '/ws/mobile', publicUrl: '', gatewayInstanceId: 'gi-abc',
     platform: 'linux', webPid: 4321,
     tools: { restartWeb: true, stopWeb: true },
     cloudflare: { supported: false, enabled: false, state: 'disabled', port: 3082, configured: false },
@@ -193,7 +192,7 @@ for (const [needle, what] of [
   ['My Phone (2)', 'duplicate device names are numbered via displayName'],
   ['>吊销<', 'revoke button present'],
   ['已刷新 · 10:00:00', 'refresh notice'],
-  ['v0.7.15', 'version footer'],
+  ['v0.7.16', 'version footer'],
   ['完成', 'close button'],
   ['连接模式', 'connection-mode group'],
   ['直连', 'direct option offered'],
@@ -218,8 +217,7 @@ for (const [needle, what] of [
   ['维护工具', 'maintenance tools card rendered'],
   ['重启 DSH Web', 'restart tool offered'],
   ['停止 DSH Web', 'stop tool offered'],
-  ['配对连接方式', 'pairing route selector rendered'],
-  ['自动选择 · 优先外网', 'auto route option offered'],
+  ['中继模式：二维码指向上面的中继地址，不需要在本节选择入口。', 'relay mode replaces the route selector with an explanation'],
 ]) check(htmlB.includes(needle), what)
 check(!htmlB.includes('mgw-note mgw-danger'), 'no bare red note is left in the relay group')
 check(!htmlB.includes('nU2yVdMWY2fePU9MHkkD6PQJ3V+FkyItgDfWjVy95Go='), 'full public key is not dumped into the page')
@@ -249,7 +247,10 @@ for (const [needle, what] of [
   ['WebSocket 地址（二维码指向这里）', 'direct mode labels the ws field as the QR target'],
   ['公网接入', 'direct-mode public-access label is plain (no relay caveat)'],
   ['ws://192.168.3.110:3081/ws/mobile', 'gateway address shown'],
+  ['配对连接方式', 'route selector rendered in direct mode'],
+  ['自动选择 · 优先外网', 'auto route option offered'],
 ]) check(htmlC.includes(needle), what)
+check(!htmlC.includes('中继模式：二维码指向上面的中继地址'), 'direct mode does not show the relay route note')
 // negative checks: the relay details must not leak into direct mode
 for (const needle of ['wss://relay.ahwe.top', 'nodeId ecb2de50', 'agentPubKey nU2yVdMWY2']) {
   check(!htmlC.includes(needle), `direct mode hides ${needle}`)
