@@ -405,6 +405,14 @@ check(src.includes("statusData.pairingMode === 'relay'")
   && src.includes('statusData.mobileConnectSeq > pairingConnectSeqRef.current')
   && src.includes('pairingConnectSeqRef.current = typeof status?.mobileConnectSeq'),
   'relay mode closes the QR dialog on a new mobile connect (the code is never redeemed)')
+// 「复制配对 Token」在非安全上下文（fnOS 网关是纯 http）里没有 navigator.clipboard，
+// 必须回退到 execCommand('copy')；失败提示还要画在二维码弹窗内部——
+// 面板顶部的错误条被模态盖住，用户看不到，就像按钮点不动。
+check(src.includes("document.execCommand('copy')")
+  && src.includes('const writeClipboard = (text)')
+  && src.includes('const [copyNotice, setCopyNotice] = React.useState(null)')
+  && src.includes("copyNotice ? React.createElement('div', { role: 'alert'"),
+  'copy pairing token falls back to execCommand and reports inside the QR dialog')
 // 首屏不能显示 cloudflare 地址：refresh() 必须先采纳服务端的 pairingMode，
 // 否则本地 ref 停留在 auto，中继模式下地址栏仍是 tunnel 地址。
 check(src.includes("statusData.pairingMode === 'relay' && pairingRouteRef.current !== 'custom'")
