@@ -150,7 +150,7 @@ const seeds = [
   false,                                                                                     // showAllDevices
   {                                                                                          // status
     gatewayEnabled: true, gatewayMode: 'persistent', gatewayId: '9f1c-uuid', gatewayName: '家里电脑',
-    requireAuth: true, version: '0.8.0', webPort: 2298, wsPath: '/ws/mobile', publicUrl: '', gatewayInstanceId: 'gi-abc',
+    requireAuth: true, version: '0.8.1', webPort: 2298, wsPath: '/ws/mobile', publicUrl: '', gatewayInstanceId: 'gi-abc',
     platform: 'linux', webPid: 4321,
     tools: { restartWeb: true, stopWeb: true },
     cloudflare: { supported: false, enabled: false, state: 'disabled', port: 3082, configured: false },
@@ -213,7 +213,7 @@ for (const [needle, what] of [
   ['My Phone (2)', 'duplicate device names are numbered via displayName'],
   ['>吊销<', 'revoke button present'],
   ['已刷新 · 10:00:00', 'refresh notice'],
-  ['v0.8.0', 'version footer'],
+  ['v0.8.1', 'version footer'],
   ['aria-label="关闭"', 'close button'],
   ['中继 · 小程序', 'relay is an option of the pairing-route dropdown'],
   ['中继 · 小程序', 'relay is an option of the pairing-route dropdown'],
@@ -394,6 +394,10 @@ check(src.includes('function GatewaySelect'), 'the panel uses the themed Gateway
 check(src.includes("JSON.stringify({ publicUrl: endpoint })") && !src.includes('deviceName'), 'pairing body carries only publicUrl; the device-name field is gone')
 check(src.includes('apiPath') && src.includes("value: 'relay'") && src.includes('/mgw/mode'),
   'fork deltas present: apiPath, relay route, mode switch')
+// 上游基底的 module id 是 dsh-plugin-mobile-gateway；加载器按包名
+// dsh-plugin-weapp-gateway 查找，id 不一致会 "loaded without registering"。
+check(/id: 'dsh-plugin-weapp-gateway'/.test(src) && !src.includes("id: 'dsh-plugin-mobile-gateway'"),
+  'module id matches the package name so the loader registers it')
 check(src.includes('/mgw/cloudflare/check') && src.includes('/mgw/cloudflare/restart'), 'cloudflare check/restart routes wired')
 check(src.includes('tunnel.publicReady === true'), 'connection advice trusts publicReady, not raw tunnel state')
 
