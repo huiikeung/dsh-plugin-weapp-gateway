@@ -394,6 +394,11 @@ check(src.includes('function GatewaySelect'), 'the panel uses the themed Gateway
 check(src.includes("JSON.stringify({ publicUrl: endpoint })") && !src.includes('deviceName'), 'pairing body carries only publicUrl; the device-name field is gone')
 check(src.includes('apiPath') && src.includes("value: 'relay'") && src.includes('/mgw/mode'),
   'fork deltas present: apiPath, relay route, mode switch')
+// 首屏不能显示 cloudflare 地址：refresh() 必须先采纳服务端的 pairingMode，
+// 否则本地 ref 停留在 auto，中继模式下地址栏仍是 tunnel 地址。
+check(src.includes("statusData.pairingMode === 'relay' && pairingRouteRef.current !== 'custom'")
+  && src.includes("const preferredUrl = pairingUrlFor(pairingRouteRef.current, statusData)"),
+  'refresh adopts the server pairing mode before deriving the address')
 // 上游基底的 module id 是 dsh-plugin-mobile-gateway；加载器按包名
 // dsh-plugin-weapp-gateway 查找，id 不一致会 "loaded without registering"。
 check(/id: 'dsh-plugin-weapp-gateway'/.test(src) && !src.includes("id: 'dsh-plugin-mobile-gateway'"),
