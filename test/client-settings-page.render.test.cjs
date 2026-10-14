@@ -100,9 +100,18 @@ check(reg.options.order === 35, `section order = 35 (got ${reg.options.order})`)
 check(typeof reg.options.label === 'function' && reg.options.label() === '移动设备', 'label = 移动设备')
 check(typeof reg.component === 'function', 'component is a function')
 
+// ------------------------------------------------------- settings entry card
+console.log('\n=== settings entry card ===')
+const entryHtml = renderToStaticMarkup(React.createElement(exported.MobileGatewayEntry, null))
+check(entryHtml.includes('mgw-entry'), 'settings page shows an entry card (no inline panel)')
+check(entryHtml.includes('移动设备'), 'entry card names the feature')
+check(entryHtml.includes('管理移动网关'), 'entry card explains what it manages')
+check(entryHtml.includes('aria-haspopup="dialog"'), 'entry card announces it opens a dialog')
+check(!entryHtml.includes('mgw-dialog-content'), 'the dialog body is not rendered until opened')
+
 // ------------------------------------------------------------- render A: initial
 console.log('\n=== render A: initial (loading) state ===')
-const htmlA = renderToStaticMarkup(React.createElement(reg.component, { close: () => {} }))
+const htmlA = renderToStaticMarkup(React.createElement(exported.MobileGatewaySection, { close: () => {} }))
 for (const [needle, what] of [
   ['请先开启移动网关', 'pair button disabled branch'],
   ['加载中…', 'device list loading branch'],
@@ -126,7 +135,7 @@ const seeds = [
   ], // devices
   {                                                                                          // status
     gatewayEnabled: true, gatewayMode: 'persistent', gatewayId: '9f1c-uuid', gatewayName: '家里电脑',
-    requireAuth: true, version: '0.7.20', webPort: 2298, wsPath: '/ws/mobile', publicUrl: '', gatewayInstanceId: 'gi-abc',
+    requireAuth: true, version: '0.7.21', webPort: 2298, wsPath: '/ws/mobile', publicUrl: '', gatewayInstanceId: 'gi-abc',
     platform: 'linux', webPid: 4321,
     tools: { restartWeb: true, stopWeb: true },
     cloudflare: { supported: false, enabled: false, state: 'disabled', port: 3082, configured: false },
@@ -171,7 +180,7 @@ const exportedB = loadBundle(seededReact(seeds)).factory((id) => {
 })
 registrations.length = 0
 exportedB.apply({ slots })
-const htmlB = renderToStaticMarkup(React.createElement(registrations[0].component, { close: () => {} }))
+const htmlB = renderToStaticMarkup(React.createElement(exportedB.MobileGatewaySection, { close: () => {} }))
 
 for (const [needle, what] of [
   ['家里电脑 · 9f1c-uuid', 'gateway identity'],
@@ -193,9 +202,9 @@ for (const [needle, what] of [
   ['My Phone (2)', 'duplicate device names are numbered via displayName'],
   ['>吊销<', 'revoke button present'],
   ['已刷新 · 10:00:00', 'refresh notice'],
-  ['v0.7.20', 'version footer'],
+  ['v0.7.21', 'version footer'],
   ['完成', 'close button'],
-  ['连接模式', 'connection-mode group'],
+  ['中继 · 小程序', 'relay is an option of the pairing-route dropdown'],
   ['直连', 'direct option offered'],
   ['中继', 'relay option offered'],
   ['mgw-seg-btn selected', 'a mode is selected'],
@@ -239,9 +248,9 @@ const directExported = loadBundle(seededReact(directSeeds)).factory((id) => {
 })
 directRegistrations.length = 0
 directExported.apply({ slots: { inject: (n, t) => t(), register: (o, c) => { directRegistrations.push({ options: o, component: c }); return () => {} } } })
-const htmlC = renderToStaticMarkup(React.createElement(directRegistrations[0].component, { close: () => {} }))
+const htmlC = renderToStaticMarkup(React.createElement(directExported.MobileGatewaySection, { close: () => {} }))
 for (const [needle, what] of [
-  ['连接模式', 'connection-mode group present in direct mode'],
+  ['配对连接方式', 'route selector present in direct mode'],
   ['mgw-seg-btn selected', 'a mode is selected'],
   ['WebSocket 地址（二维码指向这里）', 'direct mode labels the ws field as the QR target'],
   ['公网接入', 'direct-mode public-access label is plain (no relay caveat)'],
@@ -279,7 +288,7 @@ const cfExported = loadBundle(seededReact(cfSeeds)).factory((id) => {
 })
 const cfRegistrations = []
 cfExported.apply({ slots: { inject: (n, t) => t(), register: (o, c) => { cfRegistrations.push({ options: o, component: c }); return () => {} } } })
-const htmlD = renderToStaticMarkup(React.createElement(cfRegistrations[0].component, { close: () => {} }))
+const htmlD = renderToStaticMarkup(React.createElement(cfExported.MobileGatewaySection, { close: () => {} }))
 for (const [needle, what] of [
   ['Cloudflare Tunnel · 外网接入', 'cloudflare group rendered on PC'],
   ['Quick Tunnel · 无需域名', 'quick mode option offered'],
@@ -313,7 +322,7 @@ const cfLinuxExported = loadBundle(seededReact(cfLinuxSeeds)).factory((id) => {
 })
 const cfLinuxRegistrations = []
 cfLinuxExported.apply({ slots: { inject: (n, t) => t(), register: (o, c) => { cfLinuxRegistrations.push({ options: o, component: c }); return () => {} } } })
-const htmlE = renderToStaticMarkup(React.createElement(cfLinuxRegistrations[0].component, { close: () => {} }))
+const htmlE = renderToStaticMarkup(React.createElement(cfLinuxExported.MobileGatewaySection, { close: () => {} }))
 for (const [needle, what] of [
   ['Cloudflare Tunnel · 外网接入', 'cloudflare group rendered on Linux'],
   ['Linux 服务器不自动下载', 'linux card explains the manual install'],
@@ -348,7 +357,7 @@ const cfNamedExported = loadBundle(seededReact(cfNamedSeeds)).factory((id) => {
 })
 const cfNamedRegistrations = []
 cfNamedExported.apply({ slots: { inject: (n, t) => t(), register: (o, c) => { cfNamedRegistrations.push({ options: o, component: c }); return () => {} } } })
-const htmlF = renderToStaticMarkup(React.createElement(cfNamedRegistrations[0].component, { close: () => {} }))
+const htmlF = renderToStaticMarkup(React.createElement(cfNamedExported.MobileGatewaySection, { close: () => {} }))
 for (const [needle, what] of [
   ['命名 Tunnel · 固定域名', 'named mode is the selected value'],
   ['https://dash.cloudflare.com/?to=/:account/tunnels', 'dashboard jump link'],
@@ -364,8 +373,10 @@ console.log('\n=== source guarantees ===')
 check(!src.includes('sidebar.footer.action'), 'no sidebar.footer.action contribution')
 check(!src.includes('shell.overlay'), 'no shell.overlay contribution')
 const injectedCss = /const CSS = `([\s\S]*?)`/.exec(src)?.[1] || ''
-check((injectedCss.match(/position:fixed/g) || []).length === 1 && injectedCss.includes('.mgw-pairing-backdrop{position:fixed'),
-  'fixed positioning is limited to the pairing modal')
+check((injectedCss.match(/position:fixed/g) || []).length === 2
+  && injectedCss.includes('.mgw-dialog-backdrop{position:fixed')
+  && injectedCss.includes('.mgw-pairing-backdrop{position:fixed'),
+  'fixed positioning is limited to the two dialogs (management + pairing)')
 check(!src.includes('sidebar.footer.action'), 'no sidebar footer action re-added alongside the custom Select')
 check(src.includes("id: 'mobile-gateway'"), 'registers the mobile-gateway settings section')
 check(src.includes('function apiPath') && src.includes('document.baseURI')
