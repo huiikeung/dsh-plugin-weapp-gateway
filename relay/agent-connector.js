@@ -385,10 +385,15 @@ async function handleClientOpen(frame, agentWs) {
   const connect = async (forcePairing) => {
     const token = forcePairing ? null : loadCreds()[GATEWAY];
     const protocols = requestedProtocols.slice();
+    // The phone reports its model as a dsh-device.<name> subprotocol. Keep it
+    // for the whole pipe lifetime, not just the first pairing: the gateway
+    // names the trusted device from this header on every (re)connect, so the
+    // device list shows the phone instead of 未命名设备.
+    const deviceName = phoneDeviceName(requestedProtocols);
     if (!token) {
       // No usable credential — first pairing, or a revoked one. Take a one-time
       // code so a single scan is enough, naming the device after the phone.
-      const pairing = await requestPairingCode(phoneDeviceName(requestedProtocols));
+      const pairing = await requestPairingCode(deviceName);
       if (pairing) {
         protocols.push('dsh-pair.' + pairing.code);
         log(`pipe ${bridgeId}: took a one-time pairing code (expires ${new Date(pairing.expiresAt).toLocaleTimeString()})`);
@@ -398,6 +403,7 @@ async function handleClientOpen(frame, agentWs) {
       'X-DSH-Channel': 'miniprogram',
       'X-DSH-Device-ID': identity.deviceId
     };
+    if (deviceName) headers['X-DSH-Device-Name'] = Buffer.from(deviceName, 'utf8').toString('base64');
     if (token) headers['Authorization'] = 'Bearer ' + token;
     // ws v8：子协议必须作为第二个位置参数，放 options.protocols 会被忽略
     const gateway = new WebSocket(GATEWAY, protocols.filter(Boolean), { headers });
