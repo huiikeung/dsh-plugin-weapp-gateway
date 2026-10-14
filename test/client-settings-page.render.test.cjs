@@ -398,6 +398,13 @@ check(src.includes('apiPath') && src.includes("value: 'relay'") && src.includes(
 check(src.includes('pairingIdRef.current = data.pairing?.id || null')
   && src.includes('!statusData.pendingPairings.includes(pairingIdRef.current)'),
   'the QR dialog auto-closes once the pairing code is consumed')
+// 中继模式下二维码里的码永远不会被兑换：connector 用自己的长期 token 拨网关，
+// extractCredential 优先看 Authorization 头，dsh-pair.<码> 子协议不会被检查。
+// 所以轮询改看连接计数——扫码 = 手机经中继连上 = 出现一次新的移动连接。
+check(src.includes("statusData.pairingMode === 'relay'")
+  && src.includes('statusData.mobileConnectSeq > pairingConnectSeqRef.current')
+  && src.includes('pairingConnectSeqRef.current = typeof status?.mobileConnectSeq'),
+  'relay mode closes the QR dialog on a new mobile connect (the code is never redeemed)')
 // 首屏不能显示 cloudflare 地址：refresh() 必须先采纳服务端的 pairingMode，
 // 否则本地 ref 停留在 auto，中继模式下地址栏仍是 tunnel 地址。
 check(src.includes("statusData.pairingMode === 'relay' && pairingRouteRef.current !== 'custom'")
