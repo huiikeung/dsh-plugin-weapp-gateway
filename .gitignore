@@ -14,3 +14,8 @@ node_modules/
 
 # local agent memory — not project content
 /.mnemon/
+
+# DeepSeek、豆包的语音输入逆向拆解和证据只保留在本地。
+/[dD]ocs/voice-input-ipa-analysis.md
+/[dD]ocs/voice-input-hold-thresholds.md
+/[dD]ocs/**/[vV]oice*[iI]nput*[eE]vidence*/

@@ -12,7 +12,7 @@ DeepSeek Harness 的设备鉴权移动网关，支持会话与实时事件、排
 >
 > v0.7.7：同步上游 v0.8.0（DSH 0.1.7-rc.2 / Session format 4、inbox 排队消息同步、Schedule 与 Permission Presets、审批 `displayReason`），管理界面仅保留在「设置 → 移动设备」，不再提供侧边栏入口。
 >
-> v0.7.14：同步上游 v0.9.0/v0.10.0
+> v0.8.6：同步上游 v0.10.1——新增官方语音输入接入（`speech-input-v1`）：移动端可查询识别器、订阅模型准备进度、准备模型、设置识别偏好、提交录音取文字、取消转写，连接关闭时自动清理任务。识别走 DSH 0.2.0-rc.2 官方 speech Remote（本机 runtime 0.2.1-alpha.2 已自带 `dsh-experimental-voice-input-bundle` 与 SenseVoice 模型目录），网关不打包 ASR 模型；面板样式表改由插件 effect 一次性注入 document.head。注意：手机端录音按钮、权限申请与音频转换仍须客户端接入，服务端到此为止。
 >
 > v0.7.15：按上游 v0.10.0 重新设计面板
 >
@@ -359,3 +359,21 @@ npm test
 ```
 
 面板右上角“工具”菜单提供“重启当前网关”和“停止 DSH Web”。重启只在通过 `dsh web` 启动时可用，会结束当前 Web 进程并沿用原启动参数重新运行；重启时自动加入 `--no-open`，不会再打开新的浏览器标签页，当前标签页会等待恢复并刷新。重启后的进程在后台运行，不再由原 Terminal 前台任务管理；需要关闭时可在同一菜单点击“停止 DSH Web”，或在 Terminal 找到监听 Web 端口的 DSH 进程并发送 `SIGTERM`。重启期间连接会短暂中断，Quick Tunnel 的外网地址可能随之改变。源码修改后需重新安装插件并重启 `dsh web`。
+
+
+## 官方语音输入
+
+网关已接入 DSH 0.2.0-rc.2 官方实验性语音输入插件。移动端可以查询识别器、订阅模型准备进度、准备模型、设置识别偏好，以及提交录音取得文字。取消和断线会中止转写，结果不会自动发送给 Agent。
+
+1. 在 DSH 插件管理中启用“语音输入”（`@deepseek-ai/dsh-experimental-voice-input-bundle`），下载并准备模型。
+2. 客户端通过已配对的 control WebSocket 查询 `speech-catalog`，确认插件可用及模型 `ready`/`standby`。
+3. 长按录音、松手后，将完整音频转换为 16 kHz 单声道 PCM16 WAV，通过 `speech-transcribe` 上传 Base64。
+4. 收到 `speech-transcript` 后将文字填入输入框，用户确认后使用现有 `message` 发送。
+
+模型运行在 DSH 电脑上，手机无需携带识别权重。当前只提供完整录音转写；客户端的录音按钮、权限申请和音频转换仍须接入。接口、准备流程和错误处理见 [协议说明](PROTOCOL.md#官方语音输入speech-input-v1)。
+
+可用已安装的官方插件核对真实 WAV 校验（识别 Provider 使用测试替身，不下载模型）：
+
+```bash
+DSH_INSTALL_ROOT=/absolute/path/to/@deepseek-ai/dsh node test/speech-official.test.mjs
+```
