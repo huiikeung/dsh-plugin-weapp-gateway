@@ -30,7 +30,9 @@ DeepSeek Harness 的设备鉴权移动网关，支持会话与实时事件、排
 >
 > v0.8.0：管理界面以上游 v0.10.0 的 client.js 为基底重写（弹窗外壳、左导航、GatewaySelect、帮助气泡、动画、手机端导航置顶全部为上游原样），fork 只保留四项增量：① 入口改为 settings.section（点击设置项直接开弹窗，无侧边栏按钮、无中间卡片）；② 中继 · 小程序进入「配对连接方式」下拉，选中即切换服务端配对模式；③ apiPath 网关前缀修复；④ 设置项导航图标自绘、Cloudflare 手动安装说明与控制台跳转链接。
 >
-> v0.8.1：修正模块 ID——换用上游 client.js 时把 id: 'dsh-plugin-mobile-gateway' 一并带入，加载器按包名找不到注册项，整个插件条目被剔除（设置页消失）。现改回 dsh-plugin-weapp-gateway 并加防回归守卫。
+> v0.8.1：修正模块 ID
+>
+> v0.8.2：移动端三个修复——弹窗导航按钮固定 40px 高度（不再塌成文字高度）；点导航不再被设置页插件折叠成汉堡按钮（捕获阶段拦截 + 自我恢复）；中继设备自动命名（连接器每次连接都上报手机型号 header，网关据此更新设备名）。——换用上游 client.js 时把 id: 'dsh-plugin-mobile-gateway' 一并带入，加载器按包名找不到注册项，整个插件条目被剔除（设置页消失）。现改回 dsh-plugin-weapp-gateway 并加防回归守卫。
 > v0.7.8：同步上游 v0.8.1（PC 端可开启 Cloudflare Quick / 命名 Tunnel、配对面板增加局域网与外网入口选择指引、工具菜单可重启网关或停止 DSH Web），管理界面仅保留在「设置 → 移动设备」。
 >
 > v0.7.9：Cloudflare Tunnel 扩展到 Linux 服务器（本 fork 定制）：上游仅支持 Windows/macOS 自动下载校验 `cloudflared`，本 fork 允许在 Linux 上使用 Cloudflare 官方 apt 源安装的 `cloudflared`（或配置 `cloudflaredPath` 指向任意可执行文件），隧道机制不变。
