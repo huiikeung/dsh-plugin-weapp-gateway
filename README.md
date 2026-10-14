@@ -34,7 +34,9 @@ DeepSeek Harness 的设备鉴权移动网关，支持会话与实时事件、排
 >
 > v0.8.2：移动端三个修复
 >
-> v0.8.3：修复上一版把弹窗导航按钮点失效的问题——原先用在捕获阶段 stopPropagation 阻止设置页插件折叠导航，但 React 的 onClick 委托在 document 根，捕获阶段拦截会连自己的 handler 一起掐死。改为 MutationObserver 监听并即时还原折叠，不碰事件。——弹窗导航按钮固定 40px 高度（不再塌成文字高度）；点导航不再被设置页插件折叠成汉堡按钮（捕获阶段拦截 + 自我恢复）；中继设备自动命名（连接器每次连接都上报手机型号 header，网关据此更新设备名）。——换用上游 client.js 时把 id: 'dsh-plugin-mobile-gateway' 一并带入，加载器按包名找不到注册项，整个插件条目被剔除（设置页消失）。现改回 dsh-plugin-weapp-gateway 并加防回归守卫。
+> v0.8.3：修复上一版把弹窗导航按钮点失效的问题
+>
+> v0.8.4：修复中继模式下打开面板地址栏仍显示 Cloudflare 地址——refresh() 原先只看本地路由 ref（初始 auto），现在先采纳服务端的 pairingMode 再推导地址，打开即显示中继地址。——原先用在捕获阶段 stopPropagation 阻止设置页插件折叠导航，但 React 的 onClick 委托在 document 根，捕获阶段拦截会连自己的 handler 一起掐死。改为 MutationObserver 监听并即时还原折叠，不碰事件。——弹窗导航按钮固定 40px 高度（不再塌成文字高度）；点导航不再被设置页插件折叠成汉堡按钮（捕获阶段拦截 + 自我恢复）；中继设备自动命名（连接器每次连接都上报手机型号 header，网关据此更新设备名）。——换用上游 client.js 时把 id: 'dsh-plugin-mobile-gateway' 一并带入，加载器按包名找不到注册项，整个插件条目被剔除（设置页消失）。现改回 dsh-plugin-weapp-gateway 并加防回归守卫。
 > v0.7.8：同步上游 v0.8.1（PC 端可开启 Cloudflare Quick / 命名 Tunnel、配对面板增加局域网与外网入口选择指引、工具菜单可重启网关或停止 DSH Web），管理界面仅保留在「设置 → 移动设备」。
 >
 > v0.7.9：Cloudflare Tunnel 扩展到 Linux 服务器（本 fork 定制）：上游仅支持 Windows/macOS 自动下载校验 `cloudflared`，本 fork 允许在 Linux 上使用 Cloudflare 官方 apt 源安装的 `cloudflared`（或配置 `cloudflaredPath` 指向任意可执行文件），隧道机制不变。
