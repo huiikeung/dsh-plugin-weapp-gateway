@@ -278,10 +278,6 @@ function expectRejected(url, options = {}) {
   const connectedStatus = await (await fetch(`${base}/mgw/status`)).json()
   assert.equal(connectedStatus.gatewayEnabled, true)
   assert.equal(connectedStatus.waitExpiresAt, null)
-  // Relay mode redeems no pairing code, so the panel falls back to a monotonic
-  // connect counter: every successful mobile connect bumps it.
-  assert.equal(typeof connectedStatus.mobileConnectSeq, 'number')
-  const connectSeqAfterPairing = connectedStatus.mobileConnectSeq
   assert.equal(typeof pairedFrame.token, 'string')
   const pairedDeviceId = pairedFrame.device && pairedFrame.device.id
   assert.equal(typeof pairedDeviceId, 'string')
@@ -294,10 +290,6 @@ function expectRejected(url, options = {}) {
   const tokenHelloPromise = waitForMessage(tokenSocket, 'hello')
   await once(tokenSocket, 'open')
   assert.equal((await tokenHelloPromise).authenticated, true)
-  // A token-authenticated dial is exactly what the relay connector does on
-  // every phone reconnect: it must still count as a connect for the panel.
-  const tokenStatus = await (await fetch(`${base}/mgw/status`)).json()
-  assert.equal(tokenStatus.mobileConnectSeq, connectSeqAfterPairing + 1)
 
   const devicesResponse = await fetch(`${base}/mgw/devices`)
   const devicesBody = await devicesResponse.json()

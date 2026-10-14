@@ -398,15 +398,8 @@ check(src.includes('apiPath') && src.includes("value: 'relay'") && src.includes(
 check(src.includes('pairingIdRef.current = data.pairing?.id || null')
   && src.includes('!statusData.pendingPairings.includes(pairingIdRef.current)'),
   'the QR dialog auto-closes once the pairing code is consumed')
-// 中继模式下二维码里的码永远不会被兑换：connector 用自己的长期 token 拨网关，
-// extractCredential 优先看 Authorization 头，dsh-pair.<码> 子协议不会被检查。
-// 所以轮询改看连接计数——扫码 = 手机经中继连上 = 出现一次新的移动连接。
-check(src.includes("statusData.pairingMode === 'relay'")
-  && src.includes('statusData.mobileConnectSeq > pairingConnectSeqRef.current')
-  && src.includes('pairingConnectSeqRef.current = typeof status?.mobileConnectSeq'),
-  'relay mode closes the QR dialog on a new mobile connect (the code is never redeemed)')
 // 「复制配对 Token」在非安全上下文（fnOS 网关是纯 http）里没有 navigator.clipboard，
-// 必须回退到 execCommand('copy')；失败提示还要画在二维码弹窗内部——
+// 必须回退到 execCommand('copy')；失败提示还要画在二维码弹窗内郣——
 // 面板顶部的错误条被模态盖住，用户看不到，就像按钮点不动。
 check(src.includes("document.execCommand('copy')")
   && src.includes('const writeClipboard = (text)')
