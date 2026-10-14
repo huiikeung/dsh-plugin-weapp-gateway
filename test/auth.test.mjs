@@ -45,10 +45,18 @@ function expectRejected(url, options = {}) {
   const registry = createRegistry(registryFile, { pairingTtlMs: 60_000 })
   const pairing = registry.createPairing('Test iPhone')
   assert.equal(registry.hasPairing(pairing.code), true)
+  // The management panel polls pendingPairings() to close the QR dialog as
+  // soon as the code is consumed: present while redeemable, gone once claimed.
+  assert.deepEqual(registry.pendingPairings(), [pairing.id])
+  const secondPending = registry.createPairing('Second Phone')
+  assert.deepEqual(registry.pendingPairings().sort(), [pairing.id, secondPending.id].sort())
+  assert.equal(registry.pendingPairings().includes(pairing.id), true)
   const clientDeviceId = '8f22f2b1-b4c0-42bd-bd91-b145f8b375a4'
   let claimed = registry.claimPairing(pairing.code)
   assert.ok(claimed)
   assert.equal(registry.claimPairing(pairing.code), undefined)
+  // A consumed code leaves the pending list — that is the panel's signal.
+  assert.equal(registry.pendingPairings().includes(pairing.id), false)
   assert.equal(registry.authenticate(claimed.token, clientDeviceId).id, claimed.device.id)
   const firstDeviceId = claimed.device.id
   const firstToken = claimed.token

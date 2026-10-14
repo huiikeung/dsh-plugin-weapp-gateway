@@ -394,6 +394,10 @@ check(src.includes('function GatewaySelect'), 'the panel uses the themed Gateway
 check(src.includes("JSON.stringify({ publicUrl: endpoint })") && !src.includes('deviceName'), 'pairing body carries only publicUrl; the device-name field is gone')
 check(src.includes('apiPath') && src.includes("value: 'relay'") && src.includes('/mgw/mode'),
   'fork deltas present: apiPath, relay route, mode switch')
+// 扫码成功后二维码弹窗要自动关闭：轮询发现自己的配对码离开待用列表即 setQr(null)。
+check(src.includes('pairingIdRef.current = data.pairing?.id || null')
+  && src.includes('!statusData.pendingPairings.includes(pairingIdRef.current)'),
+  'the QR dialog auto-closes once the pairing code is consumed')
 // 首屏不能显示 cloudflare 地址：refresh() 必须先采纳服务端的 pairingMode，
 // 否则本地 ref 停留在 auto，中继模式下地址栏仍是 tunnel 地址。
 check(src.includes("statusData.pairingMode === 'relay' && pairingRouteRef.current !== 'custom'")
