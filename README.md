@@ -12,6 +12,8 @@ DeepSeek Harness 的设备鉴权移动网关，支持会话与实时事件、排
 >
 > v0.7.7：同步上游 v0.8.0（DSH 0.1.7-rc.2 / Session format 4、inbox 排队消息同步、Schedule 与 Permission Presets、审批 `displayReason`），管理界面仅保留在「设置 → 移动设备」，不再提供侧边栏入口。
 >
+> v0.8.6（续）：修复 DSH 0.2.1 宿主上所有 Remote 请求崩溃——`Cannot read properties of undefined (reading 'signal')`。0.2.1-alpha 起 `InvokeRemoteRequest.peer` 改为必填（`assertPeerLive` 与 `methodSignal` 都会读 `peer.signal`，流式方法还会并入它），而适配器此前只传 `{namespace, method, args, signal}`；工作区/会话/历史全部不可用，只剩 `default-model`（不走 Remote Gateway）正常。现在适配器以自己的 owner Peer 发言（随插件 dispose 中止），0.1.7/0.2.0 宿主忽略该字段，因此新旧宿主通吃。附 0.2.1 宿主形状的回归测试。
+>
 > v0.8.6：同步上游 v0.10.1——新增官方语音输入接入（`speech-input-v1`）：移动端可查询识别器、订阅模型准备进度、准备模型、设置识别偏好、提交录音取文字、取消转写，连接关闭时自动清理任务。识别走 DSH 0.2.0-rc.2 官方 speech Remote（本机 runtime 0.2.1-alpha.2 已自带 `dsh-experimental-voice-input-bundle` 与 SenseVoice 模型目录），网关不打包 ASR 模型；面板样式表改由插件 effect 一次性注入 document.head。注意：手机端录音按钮、权限申请与音频转换仍须客户端接入，服务端到此为止。
 >
 > v0.7.15：按上游 v0.10.0 重新设计面板

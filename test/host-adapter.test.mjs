@@ -75,16 +75,26 @@ const host = createDshHostAdapter(gateway)
   const signal = new AbortController().signal
   const request = { audioBase64: 'AA==', providerId: 'sensevoice-local', language: 'zh' }
   await host.speech.catalog(signal)
+  // The adapter speaks as the Host itself: every request names one owner Peer
+  // (DSH 0.2.1-alpha requires it; older hosts ignore the field).
+  const hostPeer = calls[0].peer
+  assert.ok(hostPeer, 'adapter must name a Peer on every request')
+  assert.equal(hostPeer.principal.kind, 'owner')
+  assert.equal(hostPeer.interactions, 'none')
+  assert.equal(hostPeer.signal.aborted, false)
+  assert.equal(typeof hostPeer.id, 'string')
+  assert.equal(typeof hostPeer.dispose, 'function')
+  assert.equal(calls.every((call) => call.peer === hostPeer), true, 'one Peer per adapter, shared by every call')
   await host.speech.transcribe(request, signal)
   await host.speech.prepare('sensevoice-local', { downloadSource: 'https://hf-mirror.com' }, signal)
   await host.speech.configure({ language: 'zh' }, signal)
   await host.speech.cancelPreparation('sensevoice-local', signal)
   assert.deepEqual(calls.filter(call => call.namespace === 'speech'), [
-    { namespace: 'speech', method: 'catalog', args: {}, signal },
-    { namespace: 'speech', method: 'transcribe', args: { request }, signal },
-    { namespace: 'speech', method: 'prepare', args: { providerId: 'sensevoice-local', options: { downloadSource: 'https://hf-mirror.com' } }, signal },
-    { namespace: 'speech', method: 'configure', args: { patch: { language: 'zh' } }, signal },
-    { namespace: 'speech', method: 'cancelPreparation', args: { providerId: 'sensevoice-local' }, signal },
+    { namespace: 'speech', method: 'catalog', args: {}, signal, peer: hostPeer },
+    { namespace: 'speech', method: 'transcribe', args: { request }, signal, peer: hostPeer },
+    { namespace: 'speech', method: 'prepare', args: { providerId: 'sensevoice-local', options: { downloadSource: 'https://hf-mirror.com' } }, signal, peer: hostPeer },
+    { namespace: 'speech', method: 'configure', args: { patch: { language: 'zh' } }, signal, peer: hostPeer },
+    { namespace: 'speech', method: 'cancelPreparation', args: { providerId: 'sensevoice-local' }, signal, peer: hostPeer },
   ])
 }
 
@@ -195,8 +205,11 @@ console.log('DSH HOST ADAPTER TESTS PASSED')
 
 const followAbort = new AbortController()
 await host.openSessionStream('s1', followAbort.signal)
-assert.deepEqual(calls.at(-1), { namespace: 'session', method: 'follow',
-  args: { request: { address: { kind: 'session', sessionId: 's1' }, maxMessages: 12, assistantStream: true } }, signal: followAbort.signal })
+const followCall = calls.at(-1)
+assert.equal(followCall.peer.principal.kind, 'owner')
+assert.deepEqual({ ...followCall, peer: undefined }, { namespace: 'session', method: 'follow',
+  args: { request: { address: { kind: 'session', sessionId: 's1' }, maxMessages: 12, assistantStream: true } },
+  signal: followAbort.signal, peer: undefined })
 followAbort.abort()
 const badHost = createDshHostAdapter({ invoke: async () => ({}), stream: async () => (async function* () {
   yield { type: 'snapshot', header: { id: 's1', version: 2 }, cursor: 0, records: [], projections: {} }
@@ -223,4 +236,103 @@ await assert.rejects(() => badHost.sessions.history({ sessionId: 's1' }), { code
   await snapshotHost.sessions.history({ sessionId: 's1' }, caller.signal)
   assert.equal(returned, true)
   assert.equal(caller.signal.aborted, false)
+}
+
+// ---------------------------------------------------------------------------
+// DSH 0.2.1-alpha host shape. The installed runtime (0.2.1-alpha.4) made the
+// Peer explicit for in-process Remote calls: TypertGatewayService.prepareInvocation
+// runs assertPeerLive(request.peer) and methodSignal() joins request.peer.signal
+// into every stream. A request without a peer therefore fails every call with
+// "Cannot read properties of undefined (reading 'signal')" — which is exactly
+// what the NAS logged for workspace/follow and session/control. This fake host
+// reproduces those reads so a regression fails here instead of in production.
+// ---------------------------------------------------------------------------
+function createHost021Gateway() {
+  const seen = []
+  const assertPeer = (request, endpoint) => {
+    if (!request.peer) throw new TypeError(`Cannot read properties of undefined (reading 'signal') at ${endpoint}`)
+    if (request.peer.signal.aborted) throw new Error('gateway/peer-disposed')
+    if (request.peer.principal.kind !== 'owner') throw new Error('remote-access/denied')
+    seen.push(endpoint)
+  }
+  return {
+    seen,
+    async invoke(request) {
+      assertPeer(request, `${request.namespace}/${request.method}`)
+      if (request.namespace === 'session' && request.method === 'page') {
+        return { records: [{ type: 'event', event: { type: 'user/message', seq: 1, time: 1, data: {} } }], hasMore: false }
+      }
+      if (request.namespace === 'session' && request.method === 'modelCatalog') {
+        return {
+          default: { provider: 'deepseek', model: 'chat' },
+          routableProviders: ['deepseek'],
+          groups: [{ id: 'deepseek', name: 'DeepSeek', models: [{ id: 'chat', name: 'Chat' }] }],
+          failures: [],
+        }
+      }
+      if (request.namespace === 'session' && request.method === 'list') return { items: [{ sessionId: 's1' }] }
+      return { accepted: true }
+    },
+    async stream(request) {
+      assertPeer(request, `${request.namespace}/${request.method}`)
+      // methodSignal() on 0.2.1 joins the Peer signal into stream methods.
+      if (request.namespace === 'workspace') {
+        return (async function* () {
+          yield { type: 'baseline', value: { items: [{ workspaceId: 'w1' }], archivedSessionIds: [] } }
+        })()
+      }
+      if (request.namespace === 'session' && request.method === 'follow') {
+        return (async function* () {
+          yield { type: 'snapshot', header: { version: 4, id: 's1' }, cursor: 9, records: [packed], hasMore: true,
+            projections: { asOfSeq: 9, values: { modelSelection: { lastUsed: null, next: { provider: 'deepseek', model: 'chat' } } } } }
+        })()
+      }
+      if (request.namespace === 'session' && request.method === 'control') {
+        return (async function* () {
+          yield { type: 'baseline', value: { projections: { asOfSeq: 0, values: {} } } }
+        })()
+      }
+      throw new Error(`unexpected stream ${request.namespace}/${request.method}`)
+    },
+  }
+}
+
+{
+  const host021 = createDshHostAdapter(createHost021Gateway())
+  // Every domain operation the NAS actually uses must survive the 0.2.1 reads.
+  assert.deepEqual(await host021.sessions.list(), { items: [{ sessionId: 's1' }] })
+  const history = await host021.sessions.history({ sessionId: 's1' })
+  assert.equal(history.events.length, 1)
+  assert.equal(history.cursor, 9)
+  const workspace = await host021.workspace.list()
+  assert.deepEqual(workspace.items, [{ workspaceId: 'w1' }])
+  const snapshot = await host021.sessions.models({ sessionId: 's1' })
+  assert.deepEqual(snapshot.current, { provider: 'deepseek', model: 'chat' })
+  // The two background streams that retried every second on the NAS.
+  for await (const frame of await host021.openWorkspaceStream(new AbortController().signal)) {
+    assert.equal(frame.type, 'baseline')
+  }
+  const control = await host021.openControlStream(new AbortController().signal)
+  assert.equal(typeof control[Symbol.asyncIterator], 'function')
+  const sessionStream = await host021.openSessionStream('s1', new AbortController().signal)
+  assert.equal(typeof sessionStream[Symbol.asyncIterator], 'function')
+}
+
+// A host that never receives a peer must keep failing: the guard stays honest.
+{
+  const noPeer = {
+    async invoke(request) { if (!request.peer) throw new TypeError("Cannot read properties of undefined (reading 'signal')"); return {} },
+    async stream(request) { if (!request.peer) throw new TypeError("Cannot read properties of undefined (reading 'signal')"); return (async function* () { yield {} })() },
+  }
+  // Prove the failure mode is what production hit, by calling the raw service.
+  await assert.rejects(() => noPeer.invoke({ namespace: 'session', method: 'list', args: {} }),
+    /Cannot read properties of undefined \(reading 'signal'\)/)
+}
+
+// dispose() ends the Peer: streams opened afterwards must not outlive the plugin.
+{
+  const host021 = createDshHostAdapter(createHost021Gateway())
+  await host021.sessions.list()
+  host021.dispose()
+  await assert.rejects(() => host021.sessions.list(), /peer-disposed/)
 }
