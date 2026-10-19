@@ -73,6 +73,7 @@ async function waitForLanStatus(base) {
     else socket.destroy()
   })
   const ctx = {
+    inject(names) { assert.deepEqual(names, ['workspaceChanges']) },
     webServer,
     typertGateway: {
       async invoke() { throw new Error('unexpected Remote invocation') },

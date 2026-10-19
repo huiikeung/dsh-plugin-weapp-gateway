@@ -230,6 +230,7 @@ function fakeApi() {
 }
 const api = fakeApi()
 const ctx = {
+  inject(names) { assert.deepEqual(names, ['workspaceChanges']) },
   get(name) { return name === 'webServer' ? webServer : undefined },
   on(name, fn) { listeners[name] = fn; return () => {} },
   effect(fn) { disposer = fn() },

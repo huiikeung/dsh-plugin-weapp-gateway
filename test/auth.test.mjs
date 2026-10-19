@@ -109,7 +109,23 @@ function expectRejected(url, options = {}) {
     if (upgradeRoute) upgradeRoute.handler(req, socket, head)
     else socket.destroy()
   })
+  let attachWorkspaceChanges, disposeWorkspaceChanges
+  let snapshotPresent = true
+  const changeSummary = { turn: 1, total: 1, added: 2, deleted: 1,
+    files: [{ path: 'src/app.js', display: 'src/app.js', added: 2, deleted: 1 }] }
+  const changeDiff = { kind: 'text', path: 'src/app.js', display: 'src/app.js',
+    before: true, after: true, coarse: false, hunks: [] }
   const ctx = {
+    inject(names, callback) {
+      assert.deepEqual(names, ['workspaceChanges'])
+      attachWorkspaceChanges = () => callback({
+        workspaceChanges: {
+          summary(id, seq) { assert.equal(id, 's1'); assert.equal(seq, 12); return snapshotPresent ? changeSummary : undefined },
+          async diff(id, seq, index) { assert.equal(id, 's1'); assert.equal(seq, 12); assert.equal(index, 0); return changeDiff },
+        },
+        effect(factory) { disposeWorkspaceChanges = factory() },
+      })
+    },
     webServer,
     typertGateway: {
       async invoke(request) {
@@ -209,6 +225,13 @@ function expectRejected(url, options = {}) {
   const unauthenticatedSpeech = waitForMessage(debugSocket, 'error')
   debugSocket.send(JSON.stringify({ type: 'speech-catalog', requestId: 'unauthenticated-speech' }))
   assert.equal((await unauthenticatedSpeech).code, 'authentication-required')
+  for (const type of ['workspace-changes-summary', 'workspace-changes-diff']) {
+    const response = waitForMessage(debugSocket, 'error')
+    debugSocket.send(JSON.stringify({ type, requestId: type, sessionId: 's1', seq: 12, index: 0 }))
+    const frame = await response
+    assert.equal(frame.code, 'authentication-required')
+    assert.equal(frame.requestId, type)
+  }
 
   const debugClosePromise = once(debugSocket, 'close')
   const enableAuthResponse = await fetch(`${base}/mgw/auth`, {
@@ -308,10 +331,31 @@ function expectRejected(url, options = {}) {
     { headers: { 'X-DSH-Device-ID': clientDeviceId } },
   ), 401)
 
+  const unavailableChanges = waitForMessage(pairedSocket, 'error')
+  pairedSocket.send(JSON.stringify({ type: 'workspace-changes-summary', requestId: 'missing-service', sessionId: 's1', seq: 12 }))
+  assert.equal((await unavailableChanges).code, 'workspace-changes-unavailable')
+  attachWorkspaceChanges()
+  for (const type of ['workspace-changes-summary', 'workspace-changes-diff']) {
+    const response = waitForMessage(pairedSocket, type)
+    pairedSocket.send(JSON.stringify({ type, requestId: type, sessionId: 's1', seq: 12, index: 0 }))
+    const frame = await response
+    assert.equal(frame.requestId, type)
+    assert.deepEqual(frame.value, type === 'workspace-changes-summary' ? changeSummary : changeDiff)
+  }
+  snapshotPresent = false
+  const expiredChanges = waitForMessage(pairedSocket, 'workspace-changes-summary')
+  pairedSocket.send(JSON.stringify({ type: 'workspace-changes-summary', requestId: 'expired', sessionId: 's1', seq: 12 }))
+  assert.equal((await expiredChanges).value, null)
   const tokenSocket = new WebSocket(wsUrl, { headers: { Authorization: `Bearer ${pairedFrame.token}`, 'X-DSH-Channel': 'control' } })
   const tokenHelloPromise = waitForMessage(tokenSocket, 'hello')
   await once(tokenSocket, 'open')
-  assert.equal((await tokenHelloPromise).authenticated, true)
+  const tokenHello = await tokenHelloPromise
+  assert.equal(tokenHello.authenticated, true)
+  assert.ok(tokenHello.capabilities.includes('workspace-changes-v1'))
+  disposeWorkspaceChanges()
+  const removedChanges = waitForMessage(tokenSocket, 'error')
+  tokenSocket.send(JSON.stringify({ type: 'workspace-changes-summary', requestId: 'removed-service', sessionId: 's1', seq: 12 }))
+  assert.equal((await removedChanges).code, 'workspace-changes-unavailable')
   const controlSpeech = waitForMessage(tokenSocket, 'speech-transcript')
   tokenSocket.send(JSON.stringify({ type: 'speech-transcribe', requestId: 'control-speech', audioBase64: 'AA==' }))
   assert.equal((await controlSpeech).requestId, 'control-speech')
