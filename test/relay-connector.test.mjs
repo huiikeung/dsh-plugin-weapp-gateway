@@ -13,6 +13,11 @@ function check(ok, what) {
   else console.log(`OK    ${what}`)
 }
 
+const manifest = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
+check(manifest.files.includes('relay'), 'package includes the relay connector and vendor runtime')
+check(fs.existsSync(new URL('../relay/agent-connector.js', import.meta.url)), 'bundled connector exists')
+check(fs.existsSync(new URL('../relay/vendor/tweetnacl.js', import.meta.url)), 'bundled encryption dependency exists')
+
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'relay-conn-'))
 
 // ---- resolveStateDir: reuse an existing identity, else the plugin's home ----
@@ -73,13 +78,14 @@ function fakeSpawn() {
   check(spawned[0].killed === true && spawned[0].signal === 'SIGTERM', 'dispose stops the child with SIGTERM')
 }
 
-// 2) refuses to start without a relay URL
-{
+// 2) internal default and old first-party URLs use the current service.
+for (const relay of ['', 'wss://relay.ahwe.top', 'wss://relay.ahwe.top/relay/']) {
   const { spawnProcess, spawned } = fakeSpawn()
-  const supervisor = createRelayConnector({ relay: '', stateDir: path.join(temp, 'norelay'), spawnProcess })
+  const supervisor = createRelayConnector({ relay, stateDir: path.join(temp, 'norelay'), spawnProcess })
   const snap = supervisor.start()
-  check(spawned.length === 0 && snap.running === false, 'no relay URL means no spawn')
-  check(/relayUrl/.test(snap.lastError || ''), 'the missing relay URL is reported for the panel')
+  check(spawned.length === 1 && snap.running === true, 'internal service starts without a user-facing URL')
+  check(spawned[0].options.env.RELAY_URL === 'wss://dsh.ahwe.top/relay', 'legacy/default routing uses the current service')
+  supervisor.dispose()
 }
 
 // 3) a clean exit (pid lock held by an installed connector) is not a failure
