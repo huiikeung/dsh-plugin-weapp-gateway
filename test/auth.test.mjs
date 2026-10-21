@@ -117,6 +117,9 @@ function expectRejected(url, options = {}) {
     before: true, after: true, coarse: false, hunks: [] }
   const ctx = {
     inject(names, callback) {
+      // Optional host services are injected before workspaceChanges; leave them
+      // unbound so this gateway advertises only the capabilities under test.
+      if (names.length === 1 && names[0] === 'accountController') return
       assert.deepEqual(names, ['workspaceChanges'])
       attachWorkspaceChanges = () => callback({
         workspaceChanges: {

@@ -30,7 +30,10 @@ async function start(name, overrides = {}) {
     ...overrides,
   }
   const ctx = {
-    inject(names) { assert.deepEqual(names, ['workspaceChanges']) },
+    inject(names) {
+      if (names.length === 1 && names[0] === 'accountController') return
+      assert.deepEqual(names, ['workspaceChanges'])
+    },
     webServer: {
       port,
       register(route) { management = route; return () => {} },

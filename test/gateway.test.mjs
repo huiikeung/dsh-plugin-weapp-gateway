@@ -263,8 +263,9 @@ function fakeApi() {
 const api = fakeApi()
 const clawbotTestHome = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-gateway-dispatch-clawbot-'))
 const disposers = []
+const injectedServices = []
 const ctx = {
-  inject(names) { assert.deepEqual(names, ['workspaceChanges']) },
+  inject(names) { injectedServices.push([...names]) },
   get(name) {
     if (name === 'webServer') return webServer
     if (name === 'profileContext') return { name: 'web', home: clawbotTestHome }
@@ -431,6 +432,7 @@ plugin.apply(ctx, {
   deviceFile: '/tmp/dsh-mobile-gateway-dispatch-test-devices.json',
   fileDownloadChunkBytes: 64 * 1024,
 })
+assert.deepEqual(injectedServices, [['accountController'], ['workspaceChanges']])
 server.listen(webServer.port)
 
 const WebSocket = require('ws')
@@ -1089,6 +1091,13 @@ function waitFor(pred, timeout) { return new Promise((res) => { const t0 = Date.
     ['message image upload', { type: 'message', sessionId: 's1', text: 'describe this', clientTimeZone: 'Asia/Shanghai', images: [{ mediaType: 'image/jpeg', data: '/9j/2Q==', name: 'photo.jpg' }] }, (m) => { const p = api.promptCalls[api.promptCalls.length - 1]; return m.kind === 'sent' && p.clientTimeZone === 'Asia/Shanghai' && p.content[0].type === 'image' && p.content[0].data === '/9j/2Q==' && p.content[1].text === 'describe this' }],
     ['message image only', { type: 'message', sessionId: 's1', images: [{ mediaType: 'image/png', data: 'iVBORw0KGgo=' }] }, (m) => { const p = api.promptCalls[api.promptCalls.length - 1]; return m.kind === 'sent' && p.content.length === 1 && p.content[0].type === 'image' }],
     ['message invalid image', { type: 'message', sessionId: 's1', images: [{ mediaType: 'image/tiff', data: 'AA==' }] }, (m) => m.kind === 'error' && m.code === 'bad-request'],
+    ['message workspace file attachment', { type: 'message', sessionId: 's1', text: '看看这个', attachments: [{ kind: 'file', path: 'docs/a.md', name: 'a.md' }] }, (m) => { const p = api.promptCalls[api.promptCalls.length - 1]; return m.kind === 'sent' && p.content.length === 1 && p.content[0].text === '看看这个\n[工作区文件: docs/a.md]'; }],
+    ['message workspace directory attachment only', { type: 'message', sessionId: 's1', attachments: [{ kind: 'directory', path: 'src' }] }, (m) => { const p = api.promptCalls[api.promptCalls.length - 1]; return m.kind === 'sent' && p.content.length === 1 && p.content[0].text === '[工作区目录: src]'; }],
+    ['message attachment path uses forward slashes', { type: 'message', sessionId: 's1', attachments: [{ kind: 'file', path: 'docs\\a.md' }] }, (m) => { const p = api.promptCalls[api.promptCalls.length - 1]; return m.kind === 'sent' && p.content[0].text === '[工作区文件: docs/a.md]'; }],
+    ['message rejects absolute attachment path', { type: 'message', sessionId: 's1', text: 'x', attachments: [{ kind: 'file', path: '/etc/passwd' }] }, (m) => m.kind === 'error' && m.code === 'bad-request'],
+    ['message rejects parent attachment path', { type: 'message', sessionId: 's1', text: 'x', attachments: [{ kind: 'file', path: '../secret' }] }, (m) => m.kind === 'error' && m.code === 'bad-request'],
+    ['message rejects too many attachments', { type: 'message', sessionId: 's1', text: 'x', attachments: Array.from({ length: 7 }, (_, index) => ({ kind: 'file', path: `f${index}.md` })) }, (m) => m.kind === 'error' && m.code === 'bad-request'],
+    ['message rejects invalid attachment kind', { type: 'message', sessionId: 's1', text: 'x', attachments: [{ kind: 'link', path: 'x' }] }, (m) => m.kind === 'error' && m.code === 'bad-request'],
     ['agent-presets', { type: 'agent-presets' }, (m) => m.kind === 'agent-presets' && m.presets.length === 2 && m.presets[0].isDefault === true],
     ['defaults', { type: 'defaults' }, (m) => m.kind === 'defaults' && m.agentPresetDefault === 'standard' && m.permissionDefault === 'ask' && m.permissionDefaultOptions[1].value === 'code' && m.modeSelectionEnabled === true],
     ['set-default agent-preset', { type: 'set-default', target: 'agent-preset', value: 'minimal' }, (m) => m.kind === 'set-default' && m.applied === true && api.settingsUpdates.some((u) => u.ns === 'agent-preset-registry' && u.patch.selectedDefault === 'minimal')],
