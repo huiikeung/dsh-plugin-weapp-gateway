@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
 import {
   checkPluginUpdate,
   compareVersions,
+  formatPluginInstallError,
   installLatestPlugin,
   PLUGIN_PACKAGE_NAME,
 } from '../lib/plugin-updates.mjs'
@@ -12,6 +14,14 @@ assert.equal(compareVersions('1.0.0-rc.2', '1.0.0-rc.10'), -1)
 assert.equal(compareVersions('1.0.0-alpha', '1.0.0-alpha.1'), -1)
 assert.equal(compareVersions('1.0.0+build.2', '1.0.0+build.1'), 0)
 assert.throws(() => compareVersions('01.0.0', '1.0.0'), /valid semantic versions/)
+assert.equal(formatPluginInstallError({ code: 'ERR_INSTALL', message: 'Package manager refused the update' }),
+  'ERR_INSTALL: Package manager refused the update')
+assert.equal(formatPluginInstallError({ error: { message: 'Registry request failed' } }), 'Registry request failed')
+assert.equal(formatPluginInstallError({ message: 'token=hidden', accessToken: 'secret-value' }), 'token=hidden')
+assert.doesNotMatch(formatPluginInstallError({ reason: 'blocked', accessToken: 'secret-value' }), /secret-value/)
+const clientSource = await readFile(new URL('../lib/client.js', import.meta.url), 'utf8')
+assert.match(clientSource, /result\.installation\?\.errorMessage/)
+assert.doesNotMatch(clientSource, /\$\{result\.installation\.error\}/)
 
 let registryCalls = 0
 const fetchImpl = async (url, options) => {
@@ -49,6 +59,17 @@ const installed = await installLatestPlugin({
 assert.equal(installed.installed, true)
 assert.equal(installed.installation.application, 'restart-required')
 assert.deepEqual(installCalls, [[`${PLUGIN_PACKAGE_NAME}@0.8.9`, { requestId: 'update-request-1' }]])
+
+const failedUpdate = await installLatestPlugin({
+  api: { plugins: {
+    async inventory() { return { managementAvailable: true } },
+    async installBundle() { return { application: 'failed', error: { code: 'ERR_POLICY', message: 'Release blocked by policy' } } },
+  } },
+  currentVersion: '0.8.8',
+  fetchImpl,
+  requestId: 'update-request-failed',
+})
+assert.equal(failedUpdate.installation.errorMessage, 'ERR_POLICY: Release blocked by policy')
 
 const unsupported = await installLatestPlugin({
   api: { plugins: { async inventory() { return { managementAvailable: false } } } },
