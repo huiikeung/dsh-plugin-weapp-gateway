@@ -432,7 +432,13 @@ plugin.apply(ctx, {
   deviceFile: '/tmp/dsh-mobile-gateway-dispatch-test-devices.json',
   fileDownloadChunkBytes: 64 * 1024,
 })
-assert.deepEqual(injectedServices, [['accountController'], ['workspaceChanges']])
+assert.deepEqual(injectedServices, [
+  ['sessionProjections'],
+  ['sessions', 'sessionProjections'],
+  ['agents'],
+  ['accountController'],
+  ['workspaceChanges'],
+])
 server.listen(webServer.port)
 
 const WebSocket = require('ws')
