@@ -1,6 +1,6 @@
 {
   "name": "dsh-plugin-weapp-gateway",
-  "version": "0.8.13",
+  "version": "0.8.14",
   "description": "Authenticated mobile gateway for DSH with Session V4 history, live permissions, inbox-based queue sync, built-in WeChat ClawBot, plugin management, LAN and Cloudflare Tunnel access, device pairing, per-session Agent presets, relay access, and speech input",
   "main": "lib/index.mjs",
   "files": [

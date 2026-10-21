@@ -46,8 +46,13 @@ await assert.rejects(checkPluginUpdate({ currentVersion: '0.8.8', fetchImpl: asy
 await assert.rejects(checkPluginUpdate({ currentVersion: '0.8.8', fetchImpl: async () => ({ ok: false, status: 503 }) }), /HTTP 503/)
 
 const installCalls = []
+const updateCalls = []
 const api = { plugins: {
   async inventory() { return { managementAvailable: true } },
+  async listBundles() {
+    return [{ name: PLUGIN_PACKAGE_NAME, installed: true, enabled: true, source: `${PLUGIN_PACKAGE_NAME}@0.8.8` }]
+  },
+  async removeBundle(name) { updateCalls.push(['remove', name]); return { application: 'applied' } },
   async installBundle(...args) { installCalls.push(args); return { application: 'restart-required', pendingBuilds: [] } },
 } }
 const installed = await installLatestPlugin({
@@ -58,11 +63,72 @@ const installed = await installLatestPlugin({
 })
 assert.equal(installed.installed, true)
 assert.equal(installed.installation.application, 'restart-required')
-assert.deepEqual(installCalls, [[`${PLUGIN_PACKAGE_NAME}@0.8.9`, { requestId: 'update-request-1' }]])
+assert.deepEqual(updateCalls, [['remove', PLUGIN_PACKAGE_NAME]])
+assert.deepEqual(installCalls, [[`${PLUGIN_PACKAGE_NAME}@0.8.9`, {
+  requestId: 'update-request-1', saveExact: true, enabled: true,
+}]])
+
+const noHmrCalls = []
+const noHmrUpdate = await installLatestPlugin({
+  api: { plugins: {
+    async inventory() { return { managementAvailable: true } },
+    async listBundles() {
+      return [{ name: PLUGIN_PACKAGE_NAME, installed: true, enabled: false, source: `${PLUGIN_PACKAGE_NAME}@0.8.8` }]
+    },
+    async removeBundle() { return { application: 'failed', error: { code: 'stop-profile' } } },
+    async installBundle(...args) { noHmrCalls.push(args); return { application: 'restart-required' } },
+  } },
+  currentVersion: '0.8.8',
+  fetchImpl,
+  requestId: 'update-request-no-hmr',
+})
+assert.equal(noHmrUpdate.installation.application, 'restart-required')
+assert.deepEqual(noHmrCalls, [[`${PLUGIN_PACKAGE_NAME}@0.8.9`, {
+  requestId: 'update-request-no-hmr', saveExact: true, enabled: false,
+}]])
+
+const rollbackCalls = []
+const rolledBack = await installLatestPlugin({
+  api: { plugins: {
+    async inventory() { return { managementAvailable: true } },
+    async listBundles() {
+      return [{ name: PLUGIN_PACKAGE_NAME, installed: true, enabled: true, source: 'link:D:/plugins/gateway' }]
+    },
+    async removeBundle() { return { application: 'applied' } },
+    async installBundle(...args) {
+      rollbackCalls.push(args)
+      return rollbackCalls.length === 1
+        ? { application: 'failed', error: { code: 'ERR_REGISTRY', message: 'download failed' } }
+        : { application: 'restart-required' }
+    },
+  } },
+  currentVersion: '0.8.8',
+  fetchImpl,
+  requestId: 'update-request-rollback',
+})
+assert.match(rolledBack.installation.errorMessage, /previous version was restored/)
+assert.equal(rollbackCalls[0][0], `${PLUGIN_PACKAGE_NAME}@0.8.9`)
+assert.equal(rollbackCalls[1][0], 'link:D:/plugins/gateway')
+assert.deepEqual(rollbackCalls[1][1], { enabled: true })
+
+const refusedRemoval = await installLatestPlugin({
+  api: { plugins: {
+    async inventory() { return { managementAvailable: true } },
+    async listBundles() {
+      return [{ name: PLUGIN_PACKAGE_NAME, installed: true, enabled: true }]
+    },
+    async removeBundle() { return { application: 'failed', error: { code: 'not-removable' } } },
+    async installBundle() { assert.fail('must not install if the old bundle was not removed') },
+  } },
+  currentVersion: '0.8.8',
+  fetchImpl,
+})
+assert.equal(refusedRemoval.installation.errorMessage, 'not-removable')
 
 const failedUpdate = await installLatestPlugin({
   api: { plugins: {
     async inventory() { return { managementAvailable: true } },
+    async listBundles() { return [] },
     async installBundle() { return { application: 'failed', error: { code: 'ERR_POLICY', message: 'Release blocked by policy' } } },
   } },
   currentVersion: '0.8.8',
@@ -76,9 +142,10 @@ const unsupported = await installLatestPlugin({
   currentVersion: '0.8.8',
   fetchImpl,
   requestId: 'update-request-2',
+  profileName: 'desktop',
 })
 assert.equal(unsupported.reason, 'plugin-manager-unavailable')
-assert.match(unsupported.command, /dsh-plugin-weapp-gateway@0\.8\.9$/)
+assert.match(unsupported.command, /dsh plugin --profile desktop add dsh-plugin-weapp-gateway@0\.8\.9$/)
 
 const current = await installLatestPlugin({
   api: { plugins: { async inventory() { throw new Error('should not be called') } } },
