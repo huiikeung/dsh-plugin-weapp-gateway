@@ -62,17 +62,26 @@ assert.match(helperService(1000), /NoNewPrivileges=true/)
 assert.doesNotMatch(helperService(1000), /\/bin\/sh/)
 
 const helperPath = fileURLToPath(new URL('../helper/dsh_mobile_gateway_helper.py', import.meta.url))
-const helperSyntax = spawnSync('python3', ['-c', 'import pathlib,sys; compile(pathlib.Path(sys.argv[1]).read_text(), sys.argv[1], "exec")', helperPath], { encoding: 'utf8' })
+const helperSyntax = spawnSync(process.env.PYTHON || 'python3', ['-c', 'import pathlib,sys; compile(pathlib.Path(sys.argv[1]).read_text(), sys.argv[1], "exec")', helperPath], { encoding: 'utf8' })
 assert.equal(helperSyntax.status, 0, helperSyntax.stderr)
 
 const binPath = fileURLToPath(new URL('../bin/setup-ip.mjs', import.meta.url))
+const directInvocation = spawnSync(process.execPath, [binPath, '--help'], { encoding: 'utf8' })
+assert.equal(directInvocation.status, 0, directInvocation.stderr)
+assert.match(directInvocation.stdout, /dsh-plugin-weapp-gateway setup/)
 const temporaryDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-mobile-gateway-bin-'))
-const linkedBin = path.join(temporaryDirectory, 'dsh-plugin-weapp-gateway')
-fs.symlinkSync(binPath, linkedBin)
-assert.equal(isMainModule(linkedBin), true)
-const linkedInvocation = spawnSync(process.execPath, [linkedBin, '--help'], { encoding: 'utf8' })
-assert.equal(linkedInvocation.status, 0, linkedInvocation.stderr)
-assert.match(linkedInvocation.stdout, /dsh-plugin-weapp-gateway setup/)
-fs.rmSync(temporaryDirectory, { recursive: true })
+try {
+  const linkedBin = path.join(temporaryDirectory, 'dsh-plugin-weapp-gateway')
+  fs.symlinkSync(binPath, linkedBin)
+  assert.equal(isMainModule(linkedBin), true)
+  const linkedInvocation = spawnSync(process.execPath, [linkedBin, '--help'], { encoding: 'utf8' })
+  assert.equal(linkedInvocation.status, 0, linkedInvocation.stderr)
+  assert.match(linkedInvocation.stdout, /dsh-plugin-weapp-gateway setup/)
+} catch (error) {
+  if (!['EPERM', 'EACCES', 'ENOSYS'].includes(error.code)) throw error
+  console.log(`symlink launcher test skipped: ${error.code}`)
+} finally {
+  fs.rmSync(temporaryDirectory, { recursive: true })
+}
 
 console.log('public IP setup tests passed')

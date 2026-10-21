@@ -4,6 +4,12 @@
 
 # dsh-plugin-weapp-gateway
 
+### v0.8.9 · 插件在线更新
+
+- 打开「设置 → 移动设备」时自动检查 npm 最新版本，并可在面板中一键安装更新。
+- DSH 宿主支持插件管理时直接升级；旧版宿主会给出 Terminal 安装命令。构建脚本审批不会自动批准，要求重启时需手动重启 DSH。
+- 接入小程序订阅通知：通过一次性通知票据，在对应会话轮次结束后回调通知服务，不发送任务正文。
+
 ### v0.8.8 · 实时文件事件同步
 
 - 补齐实时事件中的 `workspace/changes` 与 `deliverables/presented` 转换，使实时帧与持久历史使用相同的会话、轮次和文件声明结构。
@@ -95,7 +101,10 @@ requireAuth: true
 endpoints:
   - wss://gateway.example.com/ws/mobile
   - ws://192.168.1.10:3081/ws/mobile
+notificationServiceUrl: https://dsh.ahwe.top
 ```
+
+小程序的「订阅通知」偏好开启后，网关会在对应的 `turn/end` 回调已授权的一次性通知票据。自托管公网服务时，将 `notificationServiceUrl` 改为小程序 `access-config.js` 中相同的 HTTPS 服务根地址；不要把任务正文放进通知回调。
 
 运行模式的优先级：**已保存的界面选择 > `gatewayMode` > 旧 `gatewayEnabled`**。没有保存选择时，旧配置 `gatewayEnabled: true` 对应常驻，false 对应关闭。
 

@@ -79,7 +79,14 @@ fs.mkdirSync(fileDownloadDir)
 fs.writeFileSync(path.join(fileDownloadDir, 'app-release.apk'), fileDownloadBytes)
 fs.writeFileSync(path.join(fileDownloadRoot, 'guide.pdf'), Buffer.from('%PDF-1.7\nmobile gateway\n'))
 fs.writeFileSync(outsideFile, Buffer.from('outside workspace'))
-fs.symlinkSync(outsideFile, path.join(fileDownloadRoot, 'outside-link.bin'))
+let outsideLinkCreated = false
+try {
+  fs.symlinkSync(outsideFile, path.join(fileDownloadRoot, 'outside-link.bin'))
+  outsideLinkCreated = true
+} catch (error) {
+  if (!['EPERM', 'EACCES', 'ENOSYS'].includes(error.code)) throw error
+  console.log(`file download symlink test skipped: ${error.code}`)
+}
 
 const listeners = {}
 const presetSession = { agentPreset: 'standard', sessionListMetadata: { blank: true, lastPromptAt: null } }
@@ -918,9 +925,11 @@ function waitFor(pred, timeout) { return new Promise((res) => { const t0 = Date.
   const escapedPathReady = await waitFor(() => got.some((m) => m.kind === 'error' && m.requestType === 'file-download-open' && m.code === 'bad-request'), 2000)
   interactionResults.push(['file download rejects parent path', escapedPathReady])
 
-  ws.send(JSON.stringify({ type: 'file-download-open', requestId: 'symlink-1', sessionId: 's1', path: 'outside-link.bin' }))
-  const symlinkPathReady = await waitFor(() => got.some((m) => m.kind === 'error' && m.requestType === 'file-download-open' && m.code === 'file-not-allowed'), 2000)
-  interactionResults.push(['file download rejects escaping symlink', symlinkPathReady])
+  if (outsideLinkCreated) {
+    ws.send(JSON.stringify({ type: 'file-download-open', requestId: 'symlink-1', sessionId: 's1', path: 'outside-link.bin' }))
+    const symlinkPathReady = await waitFor(() => got.some((m) => m.kind === 'error' && m.requestType === 'file-download-open' && m.code === 'file-not-allowed'), 2000)
+    interactionResults.push(['file download rejects escaping symlink', symlinkPathReady])
+  }
 
   ws.send(JSON.stringify({ type: 'question-cancel', rpcId: requestedTwo.rpcId, sessionId: 's2' }))
   const cancelReady = await waitFor(() => got.some((m) => m.kind === 'question-response' && m.rpcId === requestedTwo.rpcId), 2000)
