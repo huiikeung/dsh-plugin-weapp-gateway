@@ -302,6 +302,7 @@ function expectRejected(url, options = {}) {
     'images',
     'session-create',
     'session-agent-preset',
+    'wechat-clawbot-control-v2',
     'commands',
     'tasks',
     'goals',
