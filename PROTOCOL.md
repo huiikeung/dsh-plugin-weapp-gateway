@@ -1081,7 +1081,7 @@ Control/旧单连接接收全局模式状态增量，不受所订阅会话过滤
   "event": { "type": "assistant/message", "turn": 1, "step": 0, "text": "已完成", "reasoning": "", "toolCalls": [] } }
 ```
 `event.type` 覆盖（精炼字段）：
-- `user/message` → `{text, source, images?: ImageAttachmentRef[]}`
+- `user/message` → `{text, source, images?: ImageAttachmentRef[], attachments?: MessageAttachment[]}`
 - 实时 token 使用独立 `assistant-stream`，不是带持久 seq 的 `assistant/chunk`；详见 [rc.2 接入说明](docs/dsh-rc2-mobile-integration.md)。
 - `assistant/attempt` → `{turn, step, stream[]}`
 - `assistant/message` → `{turn, step, text, reasoning, toolCalls[], interrupted?, usage?}`
@@ -1089,6 +1089,8 @@ Control/旧单连接接收全局模式状态增量，不受所订阅会话过滤
 - `tool/call` → `{turn, step, callId, name, arguments}`
 - `tool/result` → `{turn, step, callId, isError, preview(≤400字符)}`
 - `turn/start|end` / `step/start|end` → `{turn, step, reason?}`
+
+`MessageAttachment` 的普通文件元素形如 `{kind:"file", name, receiptId?, attachmentId?, bytes?, mediaType?}`，工作区目录元素形如 `{kind:"directory", name, path}`。发送 `message` 时也可带 `{kind:"file"|"directory", path, name?}`，其中 `path` 必须是工作区相对路径；网关拒绝绝对路径、`..` 路径和超过 6 项的请求。当前 DSH Remote 仅提供 `session/prompt`，工作区文件/目录按受校验的上下文引用发送并保留在历史附件元数据中，不伪造 `receiptId`，也不会未经用户操作递归上传目录；原生文件 receipt 上传需宿主提供 `fileUploads.uploadStream` 后再启用。
 
 ### 运行中计时提示
 
