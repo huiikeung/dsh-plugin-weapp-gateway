@@ -1339,3 +1339,52 @@ Host 提供 `accountController` 服务时，配对连接的 `hello.capabilities`
 ```
 
 错误统一为 `kind:error`：`bad-request`（缺少 `requestId`）、`account-unavailable`（Host 未提供账号服务，或读取异常）。客户端应把 `account-unavailable` 当作当前 Host 不支持账号信息并隐藏相关入口，而不是提示网络错误。
+
+## 上下文仪表盘与 Agent 编队（`context-dashboard-v1` / `context-fleet-v1`）
+
+网关在 Host 提供 `sessionProjections` 服务时注册纯函数投影 `mobileContext`（key 为 `mobileContext`，`stateVersion` 为 1），把会话事件流折叠为上下文仪表盘数据；`hello.capabilities` 固定声明 `context-dashboard-v1` 与 `context-fleet-v1`。与账号请求一样，这两类请求必须来自已配对设备，其他连接返回 `authentication-required`；Host 未提供所需服务或投影未注册时返回 `context-unavailable`。
+
+```json
+{ "type": "context-dashboard", "sessionId": "…" }
+```
+
+成功响应：
+
+```json
+{ "kind": "context-dashboard", "sessionId": "…", "asOfSeq": 123,
+  "value": {
+    "v": 1, "model": "deepseek-chat", "provider": "deepseek", "contextWindow": 128000,
+    "current": { "system": 1, "tools": 2, "user": 3, "inject": 4, "skill": 5, "assistant": 6, "tool": 7, "total": 28 },
+    "counts": { "humanInputs": 1, "answers": 1, "toolCalls": 1, "skillLoads": 0, "injects": 0, "compactions": 0, "prunes": 0 },
+    "tools": { "total": 1, "names": [{ "name": "read_file", "count": 1 }] },
+    "timing": { "wallMs": 1200 },
+    "requests": [{ "seq": 42, "time": 1, "turn": 1, "step": 0, "system": 1, "tools": 2, "user": 3, "total": 6 }],
+    "events": [{ "seq": 43, "time": 1, "kind": "inject", "form": "context" }],
+    "truncated": { "requests": false, "events": false, "surface": false },
+    "breakdown": { "…": "Host contextBreakdown 或 null" },
+    "usage": { "…": "Host tokenUsage 或 null" },
+    "stats": { "…": "Host sessionStats 或 null" }
+  } }
+```
+
+`current` 的 token 估算采用与 DSH token meter 相同的固定密度启发式（每 4 字符 1 token，加块/角色开销）；`breakdown` / `usage` / `stats` 是 Host 的 `contextBreakdown` / `tokenUsage` / `sessionStats` 投影，Host 未提供时为 `null`。`events` 只保留最近 120 条，`requests` 最近 300 条，surface 节点最多 4000 个；被裁剪时 `truncated` 对应字段为 `true`。`timing.wallMs` 剔除提问与审批等待时间。
+
+```json
+{ "type": "context-fleet", "sessionId": "…" }
+```
+
+```json
+{ "kind": "context-fleet", "sessionId": "…",
+  "value": {
+    "rootSessionId": "…", "currentSessionId": "…",
+    "agents": [{ "sessionId": "…", "title": "…", "depth": 0, "isCurrent": true, "isRoot": true,
+      "running": false, "createdAt": 1, "composition": { "system": 1, "tools": 2, "user": 3, "inject": 4, "skill": 5, "assistant": 6, "tool": 7, "total": 28 },
+      "parentSessionId": "…", "mode": "one-shot", "label": "…", "model": "…", "provider": "…",
+      "contextWindow": 128000, "pressureTokens": 900, "tokensTotal": 20, "turns": 2, "steps": 3, "activeMs": 500 }],
+    "counts": { "agents": 1, "running": 0, "subagents": 0 }
+  } }
+```
+
+`context-fleet` 需要 Host 的 `sessions` + `sessionProjections` 服务；只把 `origin: "subagent"` 的会话当作子节点，fork 只是共享谱系的独立会话，只在当前会话的祖先链中出现。家族最多 40 个成员，当前会话始终可见。
+
+错误统一为 `kind:error`：`authentication-required`、`bad-request`（缺少 `sessionId`）、`context-unavailable`（Host 未提供所需服务或投影未注册）。客户端应把 `context-unavailable` 当作当前 Host 不支持该项并隐藏入口。

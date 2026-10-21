@@ -4,6 +4,14 @@
 
 # dsh-plugin-weapp-gateway
 
+### v0.8.16 · 上下文仪表盘与 Agent 编队
+
+- 新增纯函数会话投影 `mobileContext`：把会话事件流折叠为上下文构成（system / tools / user / inject / skill / assistant / tool）、累积 token、请求趋势、工具调用、压缩/剪枝事件与真实工作时长（剔除提问与审批等待）。token 估算与 DSH token meter 的固定密度启发式一致，折叠状态有界并可被投影缓存检查点。
+- 配对设备可通过 `context-dashboard` 读取当前会话的仪表盘数据，并附带 Host 的 `contextBreakdown` / `tokenUsage` / `sessionStats` 官方投影；Host 未注册投影时返回 `context-unavailable`。
+- `context-fleet` 返回当前 Agent 的会话家族（祖先链 + subagent 子树，最多 40 个成员），每个成员带上下文构成、token、轮次/步骤、运行状态与耗时；fork 不作为 subagent 子节点，只在祖先链中显示。
+- `hello.capabilities` 新增 `context-dashboard-v1` 与 `context-fleet-v1`；请求必须来自已配对设备，旧 Host 或未提供服务的 Host 返回 `context-unavailable`，网关其余功能不受影响。
+- 协议细节见 [PROTOCOL.md](PROTOCOL.md#上下文仪表盘与-agent-编队context-dashboard-v1--context-fleet-v1)。
+
 ### v0.8.15 · 工作区附件与 DeepSeek 账号
 
 - 移动端发送消息时可附带工作区文件或目录引用：最多 6 项、只接受工作区相对路径，网关拒绝绝对路径、`..` 和空项；引用会作为受校验的上下文发送给 Agent，并不伪造文件 receipt。
