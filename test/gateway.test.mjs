@@ -11,6 +11,29 @@ const { handleQuery } = await import('../lib/index.mjs')
 const assert = await import('node:assert/strict')
 {
   const calls = []
+  const api = { clawbot: { async control(request) {
+    calls.push(request)
+    if (request.action === 'sessions') return { ok: true, value: { sessions: [{ id: 's1', title: 'Chat' }] } }
+    if (request.action === 'status') return { ok: true, value: { supported: true, revision: 4, enabled: false } }
+    return { ok: false, error: { code: 'clawbot-conflict', message: 'Refresh and retry.' } }
+  } } }
+  const status = await handleQuery(api, null, null, { type: 'clawbot-control', requestId: 'cb-status', action: 'status' })
+  assert.deepEqual(status, { kind: 'clawbot-control', requestId: 'cb-status', value: { supported: true, revision: 4, enabled: false } })
+  const sessions = await handleQuery(api, null, null, { type: 'clawbot-control', requestId: 'cb-sessions', action: 'sessions' })
+  assert.deepEqual(sessions.value.sessions, [{ id: 's1', title: 'Chat' }])
+  const conflict = await handleQuery(api, null, null, { type: 'clawbot-control', requestId: 'cb-route', action: 'route', expectedRevision: 4, sessionId: 's1' })
+  assert.deepEqual({ kind: conflict.kind, code: conflict.code, requestId: conflict.requestId }, {
+    kind: 'error', code: 'clawbot-conflict', requestId: 'cb-route',
+  })
+  assert.equal((await handleQuery(api, null, null, { type: 'clawbot-control', requestId: 'cb-bad', action: 'route', sessionId: 's1' })).code, 'bad-request')
+  assert.equal(calls.length, 3, 'Invalid action payloads must be rejected before reaching the host')
+  api.clawbot.control = async () => { throw new Error('secret host details') }
+  const unavailable = await handleQuery(api, null, null, { type: 'clawbot-control', requestId: 'cb-failed', action: 'status' })
+  assert.equal(unavailable.code, 'clawbot-unavailable')
+  assert.doesNotMatch(unavailable.message, /secret host details/)
+}
+{
+  const calls = []
   const api = { sessions: {
     create: async (payload) => { calls.push(payload); return { sessionId: 'empty-1' } },
     prompt: () => { throw new Error('Empty creation must never start an agent turn') },
@@ -556,12 +579,16 @@ function waitFor(pred, timeout) { return new Promise((res) => { const t0 = Date.
       assert.equal(controls.find(f => f.kind === 'hello').capabilities.includes('split-channels'), true)
       assert.equal(controls.find(f => f.kind === 'hello').capabilities.includes('schedule-management'), true)
       assert.equal(controls.find(f => f.kind === 'hello').capabilities.includes('plugin-management-v1'), true)
+      assert.equal(controls.find(f => f.kind === 'hello').capabilities.includes('wechat-clawbot-control-v1'), true)
       // Fork pin: this deployment runs DSH 0.1.7-rc.2; the capability list is
       // still advertised (the panel degrades gracefully on older hosts).
       assert.equal(controls.find(f => f.kind === 'hello').dshVersion, '0.1.7-rc.2')
       control.send(JSON.stringify({ type: 'plugin-catalog', requestId: 'unauthenticated-catalog' }))
       assert.equal(await waitFor(() => controls.some(f => f.requestId === 'unauthenticated-catalog'), 2000), true)
       assert.equal(controls.find(f => f.requestId === 'unauthenticated-catalog').code, 'authentication-required')
+      control.send(JSON.stringify({ type: 'clawbot-control', action: 'status', requestId: 'unauthenticated-clawbot' }))
+      assert.equal(await waitFor(() => controls.some(f => f.requestId === 'unauthenticated-clawbot'), 2000), true)
+      assert.equal(controls.find(f => f.requestId === 'unauthenticated-clawbot').code, 'authentication-required')
       conversation.send(JSON.stringify({ type: 'subscribe', sessionId: 's1' }))
       assert.equal(await waitFor(() => conversations.some(f => f.kind === 'subscribed'), 2000), true)
       listeners['session/event']({ id: 's1' }, { type: 'session/title', seq: 7001, time: Date.now(), data: { title: 'split test' } })
