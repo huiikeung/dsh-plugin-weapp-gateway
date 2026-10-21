@@ -4,6 +4,11 @@
 
 # dsh-plugin-weapp-gateway
 
+### v0.8.17 · 修复上下文仪表盘读取
+
+- 修复 `context-dashboard`：Host adapter 的 `sessions.history` 返回原始 `session/follow` 快照（没有 `kind` 字段），旧实现误判为读取失败并返回 `context-unavailable`；现在同时接受快照形状与网关 `proxyQuery` 的 `kind: 'history'` 形状，并补充回归测试。
+- `mobileContext` / `context-fleet` 数据与协议不变，无需客户端或配对变更。
+
 ### v0.8.16 · 上下文仪表盘与 Agent 编队
 
 - 新增纯函数会话投影 `mobileContext`：把会话事件流折叠为上下文构成（system / tools / user / inject / skill / assistant / tool）、累积 token、请求趋势、工具调用、压缩/剪枝事件与真实工作时长（剔除提问与审批等待）。token 估算与 DSH token meter 的固定密度启发式一致，折叠状态有界并可被投影缓存检查点。

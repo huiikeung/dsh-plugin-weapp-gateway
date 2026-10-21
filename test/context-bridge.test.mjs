@@ -267,6 +267,34 @@ const historyApi = {
     },
   },
 }
+
+// The real host adapter returns the raw session/follow snapshot with no `kind`
+// (only proxyQuery adds one). Accept that shape too — live 0.8.16 regression.
+const snapshotApi = {
+  sessions: {
+    async history() {
+      return {
+        cursor: 42,
+        events: [],
+        hasMore: false,
+        projections: historyApi.sessions.history ? {
+          asOfSeq: 42,
+          values: {
+            mobileContext: { v: 1, current: { total: 7 } },
+            contextBreakdown: { total: 7 },
+            tokenUsage: { totals: {} },
+            sessionStats: { turns: 1 },
+          },
+        } : undefined,
+      }
+    },
+  },
+}
+const snapshotDashboard = await handleContextQuery(snapshotApi, { type: 'context-dashboard', sessionId: 's1' })
+assert.equal(snapshotDashboard.kind, 'context-dashboard')
+assert.equal(snapshotDashboard.asOfSeq, 42)
+assert.equal(snapshotDashboard.value.v, 1)
+
 const dashboard = await handleContextQuery(historyApi, { type: 'context-dashboard', sessionId: ' s1 ' })
 assert.equal(dashboard.kind, 'context-dashboard')
 assert.equal(dashboard.sessionId, 's1')
