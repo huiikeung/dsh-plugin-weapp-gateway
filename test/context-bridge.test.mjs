@@ -23,8 +23,14 @@ assert.deepEqual(emptyView, {
   v: 1,
   current: { system: 0, tools: 0, user: 0, inject: 0, skill: 0, assistant: 0, tool: 0, total: 0 },
   counts: { humanInputs: 0, answers: 0, toolCalls: 0, skillLoads: 0, injects: 0, compactions: 0, prunes: 0 },
+  activity: { userInputs: 0, reads: 0, writes: 0, searches: 0, images: 0 },
   tools: { total: 0, names: [] },
-  timing: { wallMs: 0 },
+  timing: {
+    wallMs: 0, ttftMs: 0, reasoningMs: 0, textMs: 0, toolArgMs: 0, toolsMs: 0, otherMs: 0,
+    waitCount: 0, reasoningCount: 0, textCount: 0, toolArgCount: 0, toolCount: 0,
+    speedTokens: 0, speedMs: 0,
+  },
+  spans: [],
   requests: [],
   events: [],
   truncated: { requests: false, events: false, surface: false },
@@ -147,7 +153,7 @@ assert.equal(view.model, 'deepseek-v4')
 // --- projection definition ---------------------------------------------------
 
 assert.equal(contextProjectionDefinition.key, 'mobileContext')
-assert.equal(contextProjectionDefinition.stateVersion, 1)
+assert.equal(contextProjectionDefinition.stateVersion, 2)
 const projectionInit = contextProjectionDefinition.init()
 assert.deepEqual(contextProjectionDefinition.wire.view(projectionInit), contextView(projectionInit))
 assert.equal(contextProjectionDefinition.apply(projectionInit, { type: 'unknown' }), projectionInit)

@@ -4,6 +4,13 @@
 
 # dsh-plugin-weapp-gateway
 
+### v0.8.18 · 上下文仪表盘 v2
+
+- `mobileContext` 投影升级到 `stateVersion: 2`（旧缓存自动 refold），新增 additive 字段：
+  `activity`（用户输入/读取/写入/搜索/图片）、`timing` 六段拆分（等待/思考/回复/工具参数/工具执行/其他）+ 输出速度、`spans` 时间轴（≤600 段）、`requests[].items/prompt/output`（请求明细，上限 200）、`lastAnswer`（最近回答预览）。
+- `context-fleet` 增加 `team`（Host `agentTeam` 投影的成员/任务，各 20 条）与每个 Agent 的 `lastAnswer/phase`；微信小程序上下文/编队 v2 卡片与运行中动态刷新依赖这些字段，旧字段语义不变。
+- 协议细节见 PROTOCOL.md「上下文仪表盘与 Agent 编队」。
+
 ### v0.8.17 · 修复上下文仪表盘读取
 
 - 修复 `context-dashboard`：Host adapter 的 `sessions.history` 返回原始 `session/follow` 快照（没有 `kind` 字段），旧实现误判为读取失败并返回 `context-unavailable`；现在同时接受快照形状与网关 `proxyQuery` 的 `kind: 'history'` 形状，并补充回归测试。

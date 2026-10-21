@@ -1342,7 +1342,7 @@ Host 提供 `accountController` 服务时，配对连接的 `hello.capabilities`
 
 ## 上下文仪表盘与 Agent 编队（`context-dashboard-v1` / `context-fleet-v1`）
 
-网关在 Host 提供 `sessionProjections` 服务时注册纯函数投影 `mobileContext`（key 为 `mobileContext`，`stateVersion` 为 1），把会话事件流折叠为上下文仪表盘数据；`hello.capabilities` 固定声明 `context-dashboard-v1` 与 `context-fleet-v1`。与账号请求一样，这两类请求必须来自已配对设备，其他连接返回 `authentication-required`；Host 未提供所需服务或投影未注册时返回 `context-unavailable`。
+网关在 Host 提供 `sessionProjections` 服务时注册纯函数投影 `mobileContext`（key 为 `mobileContext`，`stateVersion` 为 2；v1 缓存会被整段 refold），把会话事件流折叠为上下文仪表盘数据；`hello.capabilities` 固定声明 `context-dashboard-v1` 与 `context-fleet-v1`。与账号请求一样，这两类请求必须来自已配对设备，其他连接返回 `authentication-required`；Host 未提供所需服务或投影未注册时返回 `context-unavailable`。
 
 ```json
 { "type": "context-dashboard", "sessionId": "…" }
@@ -1367,7 +1367,24 @@ Host 提供 `accountController` 服务时，配对连接的 `hello.capabilities`
   } }
 ```
 
-`current` 的 token 估算采用与 DSH token meter 相同的固定密度启发式（每 4 字符 1 token，加块/角色开销）；`breakdown` / `usage` / `stats` 是 Host 的 `contextBreakdown` / `tokenUsage` / `sessionStats` 投影，Host 未提供时为 `null`。`events` 只保留最近 120 条，`requests` 最近 300 条，surface 节点最多 4000 个；被裁剪时 `truncated` 对应字段为 `true`。`timing.wallMs` 剔除提问与审批等待时间。
+`current` 的 token 估算采用与 DSH token meter 相同的固定密度启发式（每 4 字符 1 token，加块/角色开销）；`breakdown` / `usage` / `stats` 是 Host 的 `contextBreakdown` / `tokenUsage` / `sessionStats` 投影，Host 未提供时为 `null`。`events` 只保留最近 120 条，`requests` 最近 200 条，surface 节点最多 4000 个、`spans` 最多 600 段；被裁剪时 `truncated` 对应字段为 `true`。`timing.wallMs` 剔除提问与审批等待时间。
+
+v2 additive 字段（旧客户端可忽略）：
+
+```json
+{ "activity": { "userInputs": 16, "reads": 36, "writes": 38, "searches": 26, "images": 4 },
+  "timing": { "wallMs": 4980000, "ttftMs": 1598000, "reasoningMs": 1825000, "textMs": 99000,
+    "toolArgMs": 617000, "toolsMs": 840000, "otherMs": 1500,
+    "waitCount": 313, "reasoningCount": 201, "textCount": 16, "toolArgCount": 313, "toolCount": 318,
+    "speedTokens": 204000, "speedMs": 2550000 },
+  "spans": [[0, 1791806835279, 1791807000000]],
+  "lastAnswer": "最近回答预览（≤240 字）",
+  "requests": [{ "seq": 53, "items": { "system": 1, "tools": 79, "user": 3 }, "prompt": 11200, "output": 191 }],
+  "team": { "members": [], "tasks": [] } }
+```
+
+`spans` 的 kind：0=等待、1=思考、2=回复、3=工具参数、4=工具执行、5=其他。
+`context-fleet` 的 `agents[]` 增加 `lastAnswer` / `phase`，`value.team` 为 `agentTeam` 投影快照（members/tasks 各截 20）。
 
 ```json
 { "type": "context-fleet", "sessionId": "…" }
