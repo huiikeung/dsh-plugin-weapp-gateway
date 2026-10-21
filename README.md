@@ -4,6 +4,13 @@
 
 # dsh-plugin-weapp-gateway
 
+### v0.8.15 · 工作区附件与 DeepSeek 账号
+
+- 移动端发送消息时可附带工作区文件或目录引用：最多 6 项、只接受工作区相对路径，网关拒绝绝对路径、`..` 和空项；引用会作为受校验的上下文发送给 Agent，并不伪造文件 receipt。
+- 实时与历史 `user/message`、`assistant/message` 事件新增 `attachments` 元数据；历史消息中的 `[工作区文件: …]` / `[工作区目录: …]` 文本也会被解析为同结构，客户端不必自行解析正文。
+- 配对设备可通过 `account-v1` 能力读取当前 DeepSeek 账号的登录状态、资料与余额；Host 未提供账号服务时能力不出现，请求返回 `account-unavailable`，旧 Host 自动降级。
+- 协议细节见 [PROTOCOL.md](PROTOCOL.md#deepseek-账号account-v1)。
+
 ### v0.8.13 · 网关内置微信 ClawBot
 
 - 将 ClawBot 控制、iLink 收发和目标会话接入直接放进网关；不再调用 `dsh-wechat-remote` 的控制 RPC，也不要求安装该插件。
