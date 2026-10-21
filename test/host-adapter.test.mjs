@@ -189,16 +189,7 @@ assert.deepEqual(await host.llm.providers(), {
   providers: [{ provider: 'deepseek', displayName: 'DeepSeek', settingsNs: 'deepseek', settingsPath: [] }],
 })
 
-// The ClawBot Remote contract flattens its control DTO into Typert args.
-{
-  const signal = new AbortController().signal
-  const request = { action: 'route', expectedRevision: 3, sessionId: 's1' }
-  assert.deepEqual(await host.clawbot.control(request, signal), { accepted: true })
-  assert.deepEqual(calls.at(-1), {
-    namespace: 'wechatClawbot', method: 'control', args: request, signal,
-    peer: calls[0].peer,
-  })
-}
+assert.equal('clawbot' in host, false, 'ClawBot runs in the gateway and must not delegate control to another plugin')
 
 const sessionModels = await host.sessions.models({ sessionId: 's1' })
 assert.deepEqual(sessionModels.current, { provider: 'deepseek', model: 'chat' })

@@ -1213,6 +1213,12 @@ Host 的 `plugin-manager/changed` 转为 `plugins-changed`（含 `reason`），`
 失败返回 `kind:error`、`requestType:session-create` 和原始 `requestId`。
 客户端不应自动重试超时的创建请求，以免重复创建会话。
 
+### 实验性微信 ClawBot（`wechat-clawbot-control-v2`）
+
+此能力由网关在 DSH 进程内直接运行，不再转发到其他插件服务。小程序需使用已配对的 control 连接；所有操作响应都回显 `requestId`。微信凭据与收件状态保存在当前 DSH profile 的本地状态目录中，不经过小程序。
+
+请求类型为 `clawbot-control`，`action` 仅接受 `status`、`sessions`、`route`、`enabled`、`login.start`、`login.poll`、`login.cancel`、`disconnect`。有状态变更的路由、启停与解绑操作用 `expectedRevision` 做冲突检查；会话列表只暴露可选的普通 DSH 会话。状态目录有单实例锁；升级切换时如果仍被旧服务占用，网关会拒绝启动 ClawBot，避免同一微信账号被两个轮询器同时消费。
+
 
 ### Independent conversation and control connections
 

@@ -6,19 +6,30 @@ const ticketB = 'b'.repeat(43)
 const delay = () => new Promise(resolve => setTimeout(resolve, 0))
 
 const sent = []
+let clock = 1000
 const notifications = createCompletionNotifications({
   serviceUrl: 'https://notify.example.test',
+  now: () => clock,
   fetchImpl: async (url, options) => { sent.push({ url: String(url), body: JSON.parse(options.body) }); return { ok: true } },
 })
 
+notifications.onSessionEvent('session-1', { type: 'session/title', data: { title: '重构通知模块' } })
 const first = notifications.register('session-1', ticketA)
 assert.ok(first)
 notifications.onSessionEvent('session-1', { type: 'turn/start', seq: 1, data: { turn: 0 } })
+notifications.onSessionEvent('session-1', {
+  type: 'assistant/message', seq: 2,
+  data: { turn: 0, usage: { inputTokens: 10000, uncachedInputTokens: 1500, outputTokens: 2345, cacheReadTokens: 8500 } },
+})
+clock = 3500
 notifications.onSessionEvent('session-1', { type: 'turn/end', seq: 2, data: { turn: 0 } })
 await delay()
 assert.equal(sent.length, 1)
 assert.equal(sent[0].body.ticket, ticketA)
-assert.deepEqual(sent[0].body, { ticket: ticketA, sessionId: 'session-1', status: 'completed' })
+assert.deepEqual(sent[0].body, {
+  ticket: ticketA, sessionId: 'session-1', status: 'completed',
+  taskName: '重构通知模块', durationMs: 2500, tokens: 12345, cacheHitRate: 0.85,
+})
 
 // A queued mobile task must not be notified when the currently running desktop task ends.
 notifications.onSessionEvent('session-2', { type: 'turn/start', seq: 3, data: { turn: 4 } })

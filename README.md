@@ -4,11 +4,18 @@
 
 # dsh-plugin-weapp-gateway
 
+### v0.8.13 · 网关内置微信 ClawBot
+
+- 将 ClawBot 控制、iLink 收发和目标会话接入直接放进网关；不再调用 `dsh-wechat-remote` 的控制 RPC，也不要求安装该插件。
+- 小程序「设置 → 实验性功能」管理微信绑定、接入会话和启停。微信凭据及消息收件状态留在电脑本地，移动端只通过配对网关发出控制请求。
+- 复用本机已有 ClawBot 状态目录并加单实例锁；若旧服务仍占用状态，先停止旧的私聊接线服务并重启 DSH，再由网关接管，避免同一账号被两个轮询器同时处理。
+- 新增 `wechat-clawbot-control-v2` 能力标记；升级网关后重新连接小程序。
+
 ### v0.8.12 · 显示插件升级失败详情
 
 - 安装器返回结构化错误时提取可读信息，不再显示 `[object Object]`；错误序列化会省略凭据、令牌和堆栈字段。
 
-### v0.8.11 · 小程序 ClawBot 私聊接线控制
+### v0.8.11 · 小程序 ClawBot 私聊接线控制（旧版代理，已由 v0.8.13 取代）
 
 - 在已配对的小程序控制通道中增加受限的 ClawBot 控制 RPC，复用 `dsh-wechat-remote` 自身的访问授权、状态冲突检查和本地凭据存储。
 - 支持读取状态、绑定流程、选择普通 DSH 会话、启停与移除本地绑定；微信凭据不传回小程序。
@@ -114,7 +121,7 @@ endpoints:
 notificationServiceUrl: https://dsh.ahwe.top
 ```
 
-小程序的「订阅通知」偏好开启后，网关会在对应的 `turn/end` 回调已授权的一次性通知票据。自托管公网服务时，将 `notificationServiceUrl` 改为小程序 `access-config.js` 中相同的 HTTPS 服务根地址；不要把任务正文放进通知回调。
+小程序的「订阅通知」偏好开启后，网关会在对应的 `turn/end` 回调已授权的一次性通知票据，并附上可用的会话标题、回合耗时、Token 用量和缓存命中率。Token 用量来自本回合 Assistant usage 的输入与输出总量；缓存命中率使用 `cacheReadTokens / (uncachedInputTokens + cacheReadTokens)`，缺少未缓存输入时回退到 `inputTokens`。通知不包含任务正文或模型回复。若希望 Token 显示为 `12.3K`，微信模板对应字段须为 `character_string`；`number` 类型只能显示纯数字。自托管公网服务时，将 `notificationServiceUrl` 改为小程序 `access-config.js` 中相同的 HTTPS 服务根地址。
 
 运行模式的优先级：**已保存的界面选择 > `gatewayMode` > 旧 `gatewayEnabled`**。没有保存选择时，旧配置 `gatewayEnabled: true` 对应常驻，false 对应关闭。
 
