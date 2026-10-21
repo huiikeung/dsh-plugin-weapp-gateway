@@ -1319,3 +1319,23 @@ history. Older gateways without the capability continue using one connection.
 取消回执只表示已发出取消信号；原转写随后返回 `speech/cancelled`，资源清理完成前仍占并发名额。断线、网关停止会中止该连接的活动转写和状态订阅。其他连接不能取消这个转写，即使属于同一设备。客户端上滑取消、切换页面或替换草稿后必须忽略旧请求的迟到结果。
 
 错误统一为 `kind:error`，包含 `requestType`, `requestId`, `code`, `message`。网关错误包括 `authentication-required`, `wrong-channel`, `bad-request`, `speech/unavailable`, `speech/busy`, `speech/request-in-progress`, `speech/request-not-found`, `speech/invalid-audio`, `speech/cancelled`, `speech/timeout`, `speech/invalid-response`, `speech/stream-ended`；官方插件的 `speech/transcription-failed` 等错误代码保留。
+
+## DeepSeek 账号（`account-v1`）
+
+Host 提供 `accountController` 服务时，配对连接的 `hello.capabilities` 包含 `account-v1`，客户端可通过控制连接读取当前 DeepSeek 账号的登录状态、资料和余额；Host 未提供该服务时能力不出现，请求返回 `account-unavailable`，旧客户端和旧 Host 均不受影响。账号请求与其他控制帧一样必须来自已配对设备。
+
+```json
+{ "type": "account", "requestId": "account-1",
+  "client": { "version": "1.2.3", "locale": "zh", "timezoneOffsetSeconds": 28800 } }
+```
+
+`requestId` 必填，最多 128 字符。`client` 可选：提供时必须带非空 `version`（最多 64 字符）；`locale` 省略时按 `en` 处理，`timezoneOffsetSeconds` 非法时按 0 处理。网关把 `client` 传给 Host 用于本地化的资料查询，不会持久化。
+
+成功响应回显 `requestId`，`state` 为 Host 的账号投影（登录状态等）；提供 `client` 时还会返回本地化后的 `profile` 和 `balance`，单字段失败时为 `null`，不影响整个响应：
+
+```json
+{ "kind": "account", "requestId": "account-1", "state": { "signedIn": true },
+  "profile": { "name": "…" }, "balance": { "currency": "CNY", "total": 0 } }
+```
+
+错误统一为 `kind:error`：`bad-request`（缺少 `requestId`）、`account-unavailable`（Host 未提供账号服务，或读取异常）。客户端应把 `account-unavailable` 当作当前 Host 不支持账号信息并隐藏相关入口，而不是提示网络错误。
