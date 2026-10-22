@@ -4,6 +4,12 @@
 
 # dsh-plugin-weapp-gateway
 
+### v0.8.23 · 额度设置读取提速
+
+- 修复小程序额度卡片页偶发「读取失败 / 未连接」：`config` 动作改为**只读缓存**，不再在打开设置页时同步请求官方余额/OpenCode Go；慢速账户接口被 8 秒上限兜底，避免整个配置请求超时。
+- 首次打开额度页仍会自动触发一次 `refresh` 拉取实时数据；之后由各来源的刷新间隔控制。
+- 小修复复：从设置页返回首页、连接状态变化时，小程序会立即重读网关的侧栏显示开关，不再显示过期卡片。
+
 ### v0.8.22 · 额度卡片对齐插件额度页
 
 - 网关内置 `dsh-cost-meter` 插件额度页的额度来源：官方余额、OpenCode Go、15 家 Coding Plan（OpenDesign / Factory / Anthropic / Z.ai / MiniMax / Kimi / OpenRouter / SiliconFlow / CommandCode / Cline Pass / SCNet / 火山方舟 / 千问 / 小米 MiMo / WorkBuddy）、CLIProxyAPI 网关额度与自定义 Provider 余额（最多 8 条）。
