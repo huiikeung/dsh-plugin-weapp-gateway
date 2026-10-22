@@ -4,6 +4,12 @@
 
 # dsh-plugin-weapp-gateway
 
+### v0.8.21 · 额度卡片原生数据
+
+- `cost-meter` 在原 `summary` / `config` / `update` / `refresh` 基础上直接返回 `dashboard`：官方账号余额、OpenCode Go 滚动/周/月额度、峰谷时段与自定义余额；首页左侧栏额度卡片与「设置 → 侧栏 → 额度卡片」共用这一路数据，不依赖 `dsh-cost-meter` 插件。
+- 新增 `set-go-key` / `clear-go-key` / `set-balance-key` / `clear-balance-key`：密钥仅写入 DSH 凭据库，不回传移动端；显示与峰谷设置写入 `$DSH_HOME/storages/weapp-cost-dashboard.json`（权限 0600），余额与 Go 额度各缓存 60 秒，`refresh` 强制刷新。
+- `hello.capabilities` 声明 `cost-meter-v1`；协议细节见 [PROTOCOL.md](PROTOCOL.md#额度卡片cost-meter-v1)。
+
 ### v0.8.18 · 上下文仪表盘 v2
 
 - `mobileContext` 投影升级到 `stateVersion: 2`（旧缓存自动 refold），新增 additive 字段：

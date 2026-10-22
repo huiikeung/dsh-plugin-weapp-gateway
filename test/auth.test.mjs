@@ -317,8 +317,10 @@ function expectRejected(url, options = {}) {
     'session-archive',
     'session-rename',
     'file-downloads',
+    'cost-meter-v1',
     'context-dashboard-v1',
     'context-fleet-v1',
+    'context-content-v1',
   ])
   const speechCatalog = waitForMessage(pairedSocket, 'speech-catalog')
   pairedSocket.send(JSON.stringify({ type: 'speech-catalog', requestId: 'speech-info' }))

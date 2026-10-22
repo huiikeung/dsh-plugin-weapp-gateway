@@ -1340,6 +1340,49 @@ Host 提供 `accountController` 服务时，配对连接的 `hello.capabilities`
 
 错误统一为 `kind:error`：`bad-request`（缺少 `requestId`）、`account-unavailable`（Host 未提供账号服务，或读取异常）。客户端应把 `account-unavailable` 当作当前 Host 不支持账号信息并隐藏相关入口，而不是提示网络错误。
 
+## 额度卡片（`cost-meter-v1`）
+
+网关内置额度卡片数据，不依赖独立的 `dsh-cost-meter` 插件；`hello.capabilities` 固定声明 `cost-meter-v1`。请求必须来自已配对设备，其他连接返回 `authentication-required`。
+
+```json
+{ "type": "cost-meter", "requestId": "cost-1", "action": "summary" }
+```
+
+`requestId` 必填，最多 128 字符；`action` 省略时按 `summary` 处理。
+
+| action | 额外字段 | 说明 |
+| --- | --- | --- |
+| `summary` | — | 折叠会话用量（30 秒缓存）并返回 `summary` 与原生 `dashboard` |
+| `config` | — | 只读显示设置，不折叠会话用量 |
+| `update` | `patch` | 校验并持久化显示设置（币种、汇率、Go 额度窗口、峰谷时段） |
+| `refresh` | — | 清空用量/余额缓存后重新读取 |
+| `set-go-key` / `clear-go-key` | `value` | 写入/清除 `OPENCODE_GO_API_KEY`（DSH 凭据库，不回传移动端） |
+| `set-balance-key` / `clear-balance-key` | `value` | 写入/清除 `DSH_WEAPP_DEEPSEEK_BALANCE_API_KEY` |
+
+成功响应回显 `requestId` 与 `action`：
+
+```json
+{ "kind": "cost-meter", "requestId": "cost-1", "action": "summary",
+  "summary": { "…": "今日/本月/累计用量汇总" },
+  "config": { "currency": "CNY", "exchangeRate": 7.2, "decimals": 3,
+    "goQuota": { "enabled": false, "main": "rolling", "barDirection": "used" },
+    "peak": { "enabled": true, "windows": [{ "start": 1, "end": 4 }] } },
+  "dashboard": {
+    "balance": { "enabled": true, "status": "ok", "currency": "CNY", "totalBalance": 0 },
+    "customBalances": [],
+    "goQuota": { "enabled": false, "configured": false, "main": "rolling", "barDirection": "used",
+      "rolling": null, "weekly": null, "monthly": null },
+    "peak": { "enabled": true, "effectiveAt": "",
+      "windows": [{ "start": 1, "end": 4 }, { "start": 6, "end": 10 }], "holidays": [] },
+    "settings": { "goQuota": { "…": "…" }, "peak": { "…": "…" },
+      "goKeyConfigured": false, "balanceKeyConfigured": false } } }
+```
+
+- 官方账号余额优先使用 Host `accountController.getBalance()`；未登录时可用 `DSH_WEAPP_DEEPSEEK_BALANCE_API_KEY` 或 `DEEPSEEK_API_KEY` 读取 DeepSeek 开放平台余额。
+- OpenCode Go 额度读取 `https://opencode.ai/zen/go/v1/usage`，Key 依次取自 DSH 凭据库、环境变量与 OpenCode 本地 auth 文件。
+- 显示与峰谷设置写入 `$DSH_HOME/storages/weapp-cost-dashboard.json`（可用 `DSH_WEAPP_COST_DASHBOARD_FILE` 覆盖，文件权限 0600）；余额与 Go 额度各缓存 60 秒。
+- 错误为 `kind:error`、`requestType: "cost-meter"`：`bad-request`、`cost-meter-unavailable`、`cost-meter-dashboard-error`、`cost-meter-credential-write-failed`。
+
 ## 上下文仪表盘与 Agent 编队（`context-dashboard-v1` / `context-fleet-v1` / `context-content-v1`）
 
 网关在 Host 提供 `sessionProjections` 服务时注册纯函数投影 `mobileContext`（key 为 `mobileContext`，`stateVersion` 为 4；旧缓存会整段 refold），把会话事件流折叠为上下文仪表盘数据；`hello.capabilities` 固定声明 `context-dashboard-v1`、`context-fleet-v1` 与 `context-content-v1`。这些请求必须来自已配对设备，其他连接返回 `authentication-required`；Host 未提供所需服务或投影未注册时返回 `context-unavailable`。
