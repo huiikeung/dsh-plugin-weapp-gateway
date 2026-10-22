@@ -4,6 +4,14 @@
 
 # dsh-plugin-weapp-gateway
 
+### v0.8.22 · 额度卡片对齐插件额度页
+
+- 网关内置 `dsh-cost-meter` 插件额度页的额度来源：官方余额、OpenCode Go、15 家 Coding Plan（OpenDesign / Factory / Anthropic / Z.ai / MiniMax / Kimi / OpenRouter / SiliconFlow / CommandCode / Cline Pass / SCNet / 火山方舟 / 千问 / 小米 MiMo / WorkBuddy）、CLIProxyAPI 网关额度与自定义 Provider 余额（最多 8 条）。
+- `cost-meter` 新增 `refresh-source`、`source-config`、`set-source-key` / `clear-source-key` 等动作；`update` 支持 `display`（四种左侧栏样式与显示位置）、预算显示、Coding Plan 与网关来源配置。小程序不再需要安装 `dsh-cost-meter`。
+- 厂商适配复用 `dsh-cost-meter` 的 MIT 代码（`lib/vendor/cost-meter/`，见 `THIRD-PARTY-NOTICES/dsh-cost-meter.txt`）；SCNet / 千问按本地逐模型会话用量估算，其余厂商走官方额度端点。
+- 所有凭据只写入 DSH 凭据库；额度设置写入 `$DSH_HOME/storages/weapp-cost-dashboard.json`（0600）。自定义余额端点只允许 https（本机回环可用 http），拒绝重定向并在外发凭据前校验主机白名单。
+- 协议细节见 [PROTOCOL.md](PROTOCOL.md#额度卡片cost-meter-v1)。
+
 ### v0.8.21 · 额度卡片原生数据
 
 - `cost-meter` 在原 `summary` / `config` / `update` / `refresh` 基础上直接返回 `dashboard`：官方账号余额、OpenCode Go 滚动/周/月额度、峰谷时段与自定义余额；首页左侧栏额度卡片与「设置 → 侧栏 → 额度卡片」共用这一路数据，不依赖 `dsh-cost-meter` 插件。

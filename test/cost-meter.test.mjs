@@ -74,13 +74,15 @@ applyCostEvent(state, {
 })
 assert.equal(Object.keys(state.days).length, 2, 'two distinct day buckets')
 const view = costMeterProjectionDefinition.wire.view(state)
-assert.equal(view.v, 1)
+assert.equal(view.v, 2)
 assert.equal(view.total.calls, 3)
 assert.equal(Object.keys(view.days).length, 2)
 assert.equal(view.days['2026-10-22'].calls, 2)
 assert.equal(view.days['2026-10-24'].calls, 1)
 assert.ok(view.total.cost > 0, 'cost must be priced above zero')
 assert.ok(view.days['2026-10-22'].cost > 0)
+assert.ok(view.days['2026-10-22'].byProviderModel, 'per-provider/model buckets back local Coding Plan estimates')
+assert.equal(Object.keys(view.days['2026-10-22'].byProviderModel).length, 2)
 
 // The view must be plain JSON (it is persisted in the host projection cache).
 assert.deepEqual(JSON.parse(JSON.stringify(view)), view)

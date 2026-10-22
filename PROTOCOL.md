@@ -1359,6 +1359,29 @@ Host 提供 `accountController` 服务时，配对连接的 `hello.capabilities`
 | `set-go-key` / `clear-go-key` | `value` | 写入/清除 `OPENCODE_GO_API_KEY`（DSH 凭据库，不回传移动端） |
 | `set-balance-key` / `clear-balance-key` | `value` | 写入/清除 `DSH_WEAPP_DEEPSEEK_BALANCE_API_KEY` |
 
+| `refresh-source` | `source` | 刷新单个来源：`plan:<id>` / `gateway:<id>` / `custom:<index>` |
+| `source-config` | — | 返回所有可配置来源的精简描述（含是否已配置凭据），不含密钥 |
+| `set-source-key` / `clear-source-key` | `source`, `value`, 可选 `secret` | 写入/清除厂商凭据到 DSH 凭据库 |
+
+`patch` 支持显示设置（`currency`、`symbol`、`decimals`、`exchangeRate`、`display.sidebarStyle` = `summary` / `simple` / `standard` / `compact`、`display.sidebarVisible`、`display.peakStyle`）、`balance`、`goQuota`、`budget`（显示位置）、`peak`、`codingPlans`、`customBalances`（≤8）与 `gatewayQuotas.sources`（≤4）。每个来源都有 `display`（`both` / `sidebar` / `settings` / `off`）与 `refreshMinutes`。
+
+`dashboard` 在原有 `balance` / `goQuota` / `peak` 基础上新增：
+
+```json
+{ "currency": "CNY", "symbol": "¥", "decimals": 3,
+  "display": { "sidebarStyle": "standard", "sidebarVisible": true, "peakStyle": "progress" },
+  "plans": [{ "id": "siliconflow", "label": "SiliconFlow 硅基流动", "status": "ok",
+    "windows": { "balance": { "text": "余额 ¥12.50", "resetsAt": "" } } }],
+  "gatewayQuotas": [{ "id": "gw1", "status": "ok", "accounts": [
+    { "provider": "claude", "label": "…", "status": "ok",
+      "windows": [{ "label": "5h", "percent": 21, "resetsAt": "…" }] }] }],
+  "customBalances": [{ "index": 0, "status": "ok", "remaining": 42.5,
+    "maxBudget": 100, "spend": 57.5, "percent": 42.5, "unit": "USD" }],
+  "settings": { "codingPlans": { }, "customBalances": [], "gatewayQuotas": { } } }
+```
+
+厂商适配器、网关额度适配器与自定义余额解析复用 `dsh-cost-meter` 的 MIT 代码（`lib/vendor/cost-meter/`）。SCNet 与千问的 `planCredits` / `planStart` 配置用于本地逐模型用量估算。
+
 成功响应回显 `requestId` 与 `action`：
 
 ```json
