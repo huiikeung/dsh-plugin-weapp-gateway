@@ -436,6 +436,10 @@ assert.deepEqual(injectedServices, [
   ['sessionProjections'],
   ['sessions', 'sessionProjections'],
   ['agents'],
+  // Cost meter registers its own `costMeter` projection plus the services the
+  // summary query reads; both are optional and lifecycle-bound.
+  ['sessionProjections'],
+  ['sessions', 'sessionProjections'],
   ['accountController'],
   ['workspaceChanges'],
 ])
