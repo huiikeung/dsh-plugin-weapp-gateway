@@ -1340,9 +1340,9 @@ Host 提供 `accountController` 服务时，配对连接的 `hello.capabilities`
 
 错误统一为 `kind:error`：`bad-request`（缺少 `requestId`）、`account-unavailable`（Host 未提供账号服务，或读取异常）。客户端应把 `account-unavailable` 当作当前 Host 不支持账号信息并隐藏相关入口，而不是提示网络错误。
 
-## 上下文仪表盘与 Agent 编队（`context-dashboard-v1` / `context-fleet-v1`）
+## 上下文仪表盘与 Agent 编队（`context-dashboard-v1` / `context-fleet-v1` / `context-content-v1`）
 
-网关在 Host 提供 `sessionProjections` 服务时注册纯函数投影 `mobileContext`（key 为 `mobileContext`，`stateVersion` 为 2；v1 缓存会被整段 refold），把会话事件流折叠为上下文仪表盘数据；`hello.capabilities` 固定声明 `context-dashboard-v1` 与 `context-fleet-v1`。与账号请求一样，这两类请求必须来自已配对设备，其他连接返回 `authentication-required`；Host 未提供所需服务或投影未注册时返回 `context-unavailable`。
+网关在 Host 提供 `sessionProjections` 服务时注册纯函数投影 `mobileContext`（key 为 `mobileContext`，`stateVersion` 为 4；旧缓存会整段 refold），把会话事件流折叠为上下文仪表盘数据；`hello.capabilities` 固定声明 `context-dashboard-v1`、`context-fleet-v1` 与 `context-content-v1`。这些请求必须来自已配对设备，其他连接返回 `authentication-required`；Host 未提供所需服务或投影未注册时返回 `context-unavailable`。
 
 ```json
 { "type": "context-dashboard", "sessionId": "…" }
@@ -1367,7 +1367,20 @@ Host 提供 `accountController` 服务时，配对连接的 `hello.capabilities`
   } }
 ```
 
-`current` 的 token 估算采用与 DSH token meter 相同的固定密度启发式（每 4 字符 1 token，加块/角色开销）；`breakdown` / `usage` / `stats` 是 Host 的 `contextBreakdown` / `tokenUsage` / `sessionStats` 投影，Host 未提供时为 `null`。`events` 只保留最近 120 条，`requests` 最近 200 条，surface 节点最多 4000 个、`spans` 最多 600 段；被裁剪时 `truncated` 对应字段为 `true`。`timing.wallMs` 剔除提问与审批等待时间。
+`current` 的 token 估算采用与 DSH token meter 相同的固定密度启发式（每 4 字符 1 token，加块/角色开销）；`breakdown` / `usage` / `stats` 是 Host 的 `contextBreakdown` / `tokenUsage` / `sessionStats` 投影，Host 未提供时为 `null`。`events` 只保留最近 120 条，`requests` 最近 200 条，surface 节点最多 4000 个、替换/压缩档案最多 400 个、请求头 epoch 最多 100 个、文件操作最多 400 条、`spans` 最多 600 段；档案与文件操作裁剪水位分别通过 `archiveFloor` / `fileOpsFloor` 表示。surface/header 列表只带轻量索引，不携带正文或工具 schema，以免周期刷新传输大段内容；`context-content` 按需读取选中条目的原文。`fileOps` 记录已知文件工具配对 call/result 推导出的读/写/搜索及行变化估算。`timing.wallMs` 剔除提问与审批等待时间。
+
+单条正文请求（同样需要已配对设备）：
+
+```json
+{ "type": "context-content", "sessionId": "…", "seq": 42 }
+```
+
+成功响应只返回选中 seq 的正文摘要；文本与工具参数最多 24,000 字符，单个工具 schema 最多 5,000 字符；任何内容触及长度上限时，`value.truncated` 为 `true`。图片仅返回附件占位，不传图像 payload。正文类型限于 system/developer/user/assistant/tool 消息及 request/header、request/context；找不到该 seq 时返回 `context-unavailable`。
+
+```json
+{ "kind": "context-content", "sessionId": "…", "seq": 42,
+  "value": { "seq": 42, "time": 1, "type": "user/message", "text": "…" } }
+```
 
 v2 additive 字段（旧客户端可忽略）：
 

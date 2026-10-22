@@ -1,7 +1,7 @@
 {
   "name": "dsh-plugin-weapp-gateway",
-  "version": "0.8.18",
-  "description": "Authenticated mobile gateway for DSH with Session V4 history, live permissions, inbox-based queue sync, built-in WeChat ClawBot, workspace file attachments, DeepSeek account info, context dashboard, agent fleet info, plugin management, LAN and Cloudflare Tunnel access, device pairing, per-session Agent presets, relay access, and speech input",
+  "version": "0.8.19",
+  "description": "Authenticated mobile gateway for DSH with Session V4 history, live permissions, inbox-based queue sync, built-in WeChat ClawBot, workspace file attachments, DeepSeek account info, context dashboard and content, agent fleet info, usage cost meter, plugin management, LAN and Cloudflare Tunnel access, device pairing, per-session Agent presets, relay access, and speech input",
   "main": "lib/index.mjs",
   "files": [
     "bin",

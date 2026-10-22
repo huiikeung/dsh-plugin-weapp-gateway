@@ -122,6 +122,10 @@ assert.deepEqual(pageCall.args, {
   },
 })
 
+await host.sessions.history({ sessionId: 's1', throughSeq: 7, beforeSeq: 8, maxMessages: 1 })
+const pinnedPageCall = calls.filter(call => call.namespace === 'session' && call.method === 'page').at(-1)
+assert.equal(pinnedPageCall.args.request.throughSeq, 7, 'targeted context reads must stay pinned to the selected event')
+
 await host.sessions.prompt({ sessionId: 's1', mode: 'queue', content: [{ type: 'text', text: 'hi' }] })
 const promptCall = calls.find((call) => call.namespace === 'session' && call.method === 'prompt')
 assert.equal(typeof promptCall.args.request.requestId, 'string')

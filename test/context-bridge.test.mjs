@@ -6,6 +6,7 @@ import {
   contextProjectionDefinition,
   contextView,
   createState,
+  handleContextContent,
   handleContextFleet,
   handleContextQuery,
   registerContextProjection,
@@ -14,7 +15,7 @@ import {
 
 // --- request types -----------------------------------------------------------
 
-assert.deepEqual([...CONTEXT_REQUEST_TYPES].sort(), ['context-dashboard', 'context-fleet'])
+assert.deepEqual([...CONTEXT_REQUEST_TYPES].sort(), ['context-content', 'context-dashboard', 'context-fleet'])
 
 // --- empty fold state --------------------------------------------------------
 
@@ -31,6 +32,10 @@ assert.deepEqual(emptyView, {
     speedTokens: 0, speedMs: 0,
   },
   spans: [],
+  surface: [],
+  archive: [],
+  headerEpochs: [],
+  fileOps: [],
   requests: [],
   events: [],
   truncated: { requests: false, events: false, surface: false },
@@ -96,6 +101,24 @@ assert.equal(view.counts.toolCalls, 1)
 assert.equal(view.current.tool, 9) // ceil(2/4) + 4 block + 4 role
 assert.deepEqual(view.tools.names, [{ name: 'read_file', count: 1 }])
 
+let fileState = createState()
+fileState = applyContextEvent(fileState, {
+  type: 'tool/call', seq: 70, time: 200,
+  data: { callId: 'edit-1', name: 'edit', arguments: JSON.stringify({ file_path: 'src/app.js', old_string: 'old', new_string: 'one\ntwo\n' }) },
+})
+fileState = applyContextEvent(fileState, {
+  type: 'tool/result', seq: 71, time: 240, surfaceOp: { op: 'append' },
+  data: { message: { role: 'tool', source: { callId: 'edit-1' }, content: [{ type: 'text', text: 'updated' }] } },
+})
+assert.deepEqual(contextView(fileState).fileOps, [{
+  seq: 71, time: 240, path: 'src/app.js', kind: 'write', tool: 'edit', err: false, added: 2, removed: 1,
+}])
+fileState = applyContextEvent(fileState, {
+  type: 'user/message', seq: 72, time: 250, surfaceOp: { op: 'replace', startSeq: 71, endSeq: 71 },
+  data: { content: [{ type: 'text', text: 'compacted' }] },
+})
+assert.equal(contextView(fileState).fileOps[0].gone, 72)
+
 // A skill tool's result moves from the tool bucket into the skill bucket.
 let skillState = createState()
 skillState = applyContextEvent(skillState, { type: 'tool/call', seq: 50, time: 140, data: { callId: 'call-2', name: 'skill' } })
@@ -153,7 +176,7 @@ assert.equal(view.model, 'deepseek-v4')
 // --- projection definition ---------------------------------------------------
 
 assert.equal(contextProjectionDefinition.key, 'mobileContext')
-assert.equal(contextProjectionDefinition.stateVersion, 2)
+assert.equal(contextProjectionDefinition.stateVersion, 4)
 const projectionInit = contextProjectionDefinition.init()
 assert.deepEqual(contextProjectionDefinition.wire.view(projectionInit), contextView(projectionInit))
 assert.equal(contextProjectionDefinition.apply(projectionInit, { type: 'unknown' }), projectionInit)
@@ -331,6 +354,37 @@ assert.equal(
   (await handleContextQuery(throwingHistoryApi, { type: 'context-dashboard', sessionId: 's1' })).code,
   'context-unavailable',
 )
+
+const detailCalls = []
+const detailFrame = await handleContextContent({ sessions: { async history(request) {
+  detailCalls.push(request)
+  return { events: [
+    { event: { type: 'user/message', seq: 18, time: 1234, data: { content: [{ type: 'text', text: 'the actual prompt' }] } } },
+    { event: { type: 'assistant/message', seq: 19, time: 1235, data: { message: { content: [{ type: 'text', text: 'not the selected event' }] } } } },
+  ] }
+} } }, { type: 'context-content', sessionId: 's1', seq: 18 })
+assert.deepEqual(detailCalls, [{ sessionId: 's1', throughSeq: 18, beforeSeq: 19, maxMessages: 1 }])
+assert.deepEqual(detailFrame, {
+  kind: 'context-content', sessionId: 's1', seq: 18,
+  value: { seq: 18, time: 1234, type: 'user/message', text: 'the actual prompt' },
+})
+assert.equal((await handleContextContent(null, { type: 'context-content', sessionId: 's1' })).code, 'bad-request')
+
+const boundedFrame = await handleContextContent({ sessions: { async history() {
+  return { events: [{ seq: 21, type: 'user/message', data: { content: [{ type: 'text', text: 'x'.repeat(25000) }] } }] }
+} } }, { type: 'context-content', sessionId: 's1', seq: 21 })
+assert.equal(boundedFrame.value.text.length, 24000)
+assert.equal(boundedFrame.value.truncated, true)
+
+const boundedSchema = await handleContextContent({ sessions: { async history() {
+  return { events: [{ seq: 22, type: 'request/header', data: { header: { tools: [{
+    name: 'tool', parameters: 'x'.repeat(6000),
+  }] } } }] }
+} } }, { type: 'context-content', sessionId: 's1', seq: 22 })
+const schemaText = boundedSchema.value.text.split('Schema: ')[1]
+assert.equal(schemaText.length, 5000)
+assert.equal(schemaText.includes('x'.repeat(5000)), false)
+assert.equal(boundedSchema.value.truncated, true)
 
 // --- context-fleet query -----------------------------------------------------
 
