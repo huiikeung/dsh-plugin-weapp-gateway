@@ -97,7 +97,7 @@ const reg = registrations[0]
 check(reg.options.name === 'settings.section', `slot name = settings.section (got ${reg.options.name})`)
 check(reg.options.id === 'mobile-gateway', `section id = mobile-gateway (got ${reg.options.id})`)
 check(reg.options.order === 35, `section order = 35 (got ${reg.options.order})`)
-check(typeof reg.options.label === 'function' && reg.options.label() === '移动设备', 'label = 移动设备')
+check(typeof reg.options.label === 'function' && reg.options.label() === '鲸尾移动网关', 'label = 鲸尾移动网关')
 check(typeof reg.component === 'function', 'component is a function')
 
 // ------------------------------------------------------- settings entry (fork)
@@ -126,6 +126,7 @@ check(src.includes("'中继 · 小程序'") && src.includes('/mgw/mode'),
 console.log('\n=== render A: initial (loading) state ===')
 const htmlA = renderToStaticMarkup(React.createElement(exported.DevicePanel, { close: () => {} }))
 for (const [needle, what] of [
+  ['鲸尾移动网关', 'branded panel title rendered'],
   ['请先开启移动网关', 'pair button disabled branch'],
   ['加载中…', 'device list loading branch'],
   ['不接受移动设备连接', 'mode description (disabled)'],

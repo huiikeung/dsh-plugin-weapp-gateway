@@ -160,6 +160,33 @@ assert.equal(applyContextEvent(createState(), { type: 'approval/asked', seq: 1, 
 const noStep = createState()
 assert.equal(applyContextEvent(noStep, { type: 'step/end', seq: 1, time: 5 }), noStep)
 
+// --- per-request activeMs feeds the trend's duration curve ------------------
+
+state = createState()
+state = applyContextEvent(state, { type: 'step/start', seq: 90, time: 1000 })
+state = applyContextEvent(state, {
+  type: 'assistant/message',
+  seq: 91,
+  time: 1450,
+  data: { turn: 1, step: 1, usage: { outputTokens: 12 } },
+})
+let activeView = contextView(state)
+assert.equal(activeView.requests.length, 1)
+assert.equal(activeView.requests[0].activeMs, 450, 'the open step spans to this response')
+
+// A log that starts mid-step has no boundary to measure, so the field is
+// omitted rather than faking a duration.
+state = createState()
+state = applyContextEvent(state, {
+  type: 'assistant/message',
+  seq: 92,
+  time: 2000,
+  data: { turn: 1, step: 1 },
+})
+activeView = contextView(state)
+assert.equal(activeView.requests.length, 1)
+assert.equal(activeView.requests[0].activeMs, undefined)
+
 // --- request header tools and context window --------------------------------
 
 state = createState()
@@ -176,7 +203,8 @@ assert.equal(view.model, 'deepseek-v4')
 // --- projection definition ---------------------------------------------------
 
 assert.equal(contextProjectionDefinition.key, 'mobileContext')
-assert.equal(contextProjectionDefinition.stateVersion, 4)
+// v5 adds each request's own `activeMs` for the trend's duration curve.
+assert.equal(contextProjectionDefinition.stateVersion, 5)
 const projectionInit = contextProjectionDefinition.init()
 assert.deepEqual(contextProjectionDefinition.wire.view(projectionInit), contextView(projectionInit))
 assert.equal(contextProjectionDefinition.apply(projectionInit, { type: 'unknown' }), projectionInit)

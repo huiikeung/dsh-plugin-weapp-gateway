@@ -82,10 +82,42 @@ test('invalid settings are rejected instead of silently written', async () => {
     const res = await call('update', { patch })
     assert.equal(res.kind, 'error', JSON.stringify(patch))
   }
-  await bad({ currency: 'EUR' })
+  // EUR 自对齐参考实现后成为受支持币种；用一个真正非法的币种验证拒绝路径。
+  await bad({ currency: 'JPY' })
   await bad({ display: { sidebarStyle: 'huge' } })
+  await bad({ display: { peakTimeDisplay: 'sometimes' } })
+  await bad({ balance: { barDirection: 'sideways' } })
+  await bad({ budget: { period: 'decade' } })
+  await bad({ peak: { peakAlertAhead: 99 } })
   await bad({ customBalances: [{ request: { url: 'file:///etc/passwd' } }] })
   await bad({ customBalances: new Array(9).fill({ request: { url: 'https://a.test/x' } }) })
+})
+
+test('EUR currency and the newly aligned display fields persist', async () => {
+  await fresh()
+  const res = await call('update', { patch: {
+    currency: 'EUR',
+    display: { peakTimeDisplay: 'countdown', sidebarTodayMetric: 'tokens', sidebarTodayBalanceInline: true },
+    balance: { showProgressBar: true, barDirection: 'used' },
+    budget: { period: 'custom', customStart: '2026-10-01', customEnd: '2026-10-31', detail: false, barDirection: 'remaining' },
+    peak: { peakAlertEnabled: true, peakAlertAhead: 5, peakAlertTarget: 'peak', peakAlertPosition: 'center' },
+  } })
+  assert.notEqual(res.kind, 'error', res.message || '')
+  assert.equal(res.config.currency, 'EUR')
+  assert.equal(res.config.display.peakTimeDisplay, 'countdown')
+  assert.equal(res.config.display.sidebarTodayMetric, 'tokens')
+  assert.equal(res.config.display.sidebarTodayBalanceInline, true)
+  assert.equal(res.config.balance.showProgressBar, true)
+  assert.equal(res.config.balance.barDirection, 'used')
+  assert.equal(res.config.budget.period, 'custom')
+  assert.equal(res.config.budget.customStart, '2026-10-01')
+  assert.equal(res.config.budget.customEnd, '2026-10-31')
+  assert.equal(res.config.budget.detail, false)
+  assert.equal(res.config.budget.barDirection, 'remaining')
+  assert.equal(res.config.peak.peakAlertEnabled, true)
+  assert.equal(res.config.peak.peakAlertAhead, 5)
+  assert.equal(res.config.peak.peakAlertTarget, 'peak')
+  assert.equal(res.config.peak.peakAlertPosition, 'center')
 })
 
 test('coding plan uses the configured credential and reports normalized windows', async () => {

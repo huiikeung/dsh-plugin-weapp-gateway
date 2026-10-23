@@ -96,7 +96,7 @@ function loadModule() {
 // ------------------------------------------------- our cell + a neighbour
 const ourSvg = makeSvg('svg')
 const gearSvg = makeSvg('svg')
-const cells = [makeCell('移动设备', ourSvg), makeCell('Web Search', gearSvg)]
+const cells = [makeCell('鲸尾移动网关', ourSvg), makeCell('Web Search', gearSvg)]
 
 console.log('=== apply() pins the glyph ===')
 installDom(cells)
@@ -127,7 +127,7 @@ check(ourSvg.children[0].tagName === 'rect', 'still the phone body (no gear remn
 console.log('\n=== survives a shell re-render that restores the gear ===')
 const freshSvg = makeSvg('svg')          // React replaced the node → no marker
 freshSvg.setAttribute('viewBox', '0 0 16 16')
-installDom([makeCell('移动设备', freshSvg), makeCell('Web Search', gearSvg)])
+installDom([makeCell('鲸尾移动网关', freshSvg), makeCell('Web Search', gearSvg)])
 const exported3 = loadModule()
 exported3.apply({ slots: { inject: (n, t) => t(), register: () => () => {} } })
 check(freshSvg.getAttribute('viewBox') === '0 0 24 24' && freshSvg.children.length === 2, 'glyph re-pinned on a fresh node')
@@ -142,12 +142,12 @@ console.log('\n=== a throwing glyph must not blank the cell ===')
 const gearSvg2 = makeSvg('svg')
 gearSvg2.setAttribute('viewBox', '0 0 16 16')
 gearSvg2.innerHTML = '<g></g><path d="M0 0h1v1H0z"></path>'
-installDom([makeCell('移动设备', gearSvg2)])
+installDom([makeCell('鲸尾移动网关', gearSvg2)])
 let warned = null
 const realWarn = console.warn
 console.warn = (...a) => { warned = a[0] }
 try {
-  loadModule().pinNavGlyph(['移动设备'], 'data-test-mark', () => { throw new Error('boom') })
+  loadModule().pinNavGlyph(['鲸尾移动网关'], 'data-test-mark', () => { throw new Error('boom') })
 } finally { console.warn = realWarn }
 check(gearSvg2.children.length === 2, 'shell glyph untouched (still has its own children)')
 check(gearSvg2.getAttribute('viewBox') === '0 0 16 16', 'shell viewBox untouched')
@@ -155,7 +155,7 @@ check(gearSvg2.getAttribute('data-test-mark') === null, 'not marked as pinned (w
 check(typeof warned === 'string' && warned.includes('nav glyph failed'), 'failure is logged, not silent')
 
 console.log('\n=== a good glyph still pins after a failed attempt ===')
-loadModule().pinNavGlyph(['移动设备'], 'data-test-mark', () => ({
+loadModule().pinNavGlyph(['鲸尾移动网关'], 'data-test-mark', () => ({
   viewBox: '0 0 24 24',
   markup: '<rect rx="2.5"></rect>',
 }))
