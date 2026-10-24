@@ -23,6 +23,7 @@ async function start(name, overrides = {}) {
   const port = server.address().port
   const config = {
     deviceFile: path.join(temp, `${name}-devices.json`),
+    logFile: path.join(temp, `${name}.log`),
     gatewayName: name,
     publicUrlFile: path.join(temp, 'no-public-url'),
     gatewayWaitTimeoutMs: 120,

@@ -7,7 +7,11 @@ const os = require('node:os')
 const path = require('node:path')
 const crypto = require('node:crypto')
 const plugin = (await import('../lib/index.mjs')).default
-const { handleQuery } = await import('../lib/index.mjs')
+const { handleQuery, setLogFile } = await import('../lib/index.mjs')
+// The direct handleQuery calls below never go through plugin.apply, so the
+// logFile option is not in play: redirect it explicitly instead of appending
+// to the operator's shared /tmp/mobile-gateway.log.
+setLogFile('/tmp/dsh-mobile-gateway-dispatch-test.log')
 const assert = await import('node:assert/strict')
 {
   const calls = []
@@ -430,6 +434,7 @@ plugin.apply(ctx, {
   gatewayEnabled: true,
   requireAuth: false,
   deviceFile: '/tmp/dsh-mobile-gateway-dispatch-test-devices.json',
+  logFile: '/tmp/dsh-mobile-gateway-dispatch-test.log',
   fileDownloadChunkBytes: 64 * 1024,
 })
 assert.deepEqual(injectedServices, [

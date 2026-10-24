@@ -8,6 +8,7 @@ import {
   createState,
   handleContextContent,
   handleContextFleet,
+  handleContextInsights,
   handleContextQuery,
   registerContextProjection,
   registerContextServices,
@@ -15,17 +16,19 @@ import {
 
 // --- request types -----------------------------------------------------------
 
-assert.deepEqual([...CONTEXT_REQUEST_TYPES].sort(), ['context-content', 'context-dashboard', 'context-fleet'])
+assert.deepEqual([...CONTEXT_REQUEST_TYPES].sort(), ['context-comms', 'context-content', 'context-dashboard', 'context-fleet', 'context-insights'])
 
 // --- empty fold state --------------------------------------------------------
 
 const emptyView = contextView(createState())
 assert.deepEqual(emptyView, {
   v: 1,
+  commandStats: { bg: 0, failed: 0, ms: 0, runs: 0 },
+  commands: [],
   current: { system: 0, tools: 0, user: 0, inject: 0, skill: 0, assistant: 0, tool: 0, total: 0 },
   counts: { humanInputs: 0, answers: 0, toolCalls: 0, skillLoads: 0, injects: 0, compactions: 0, prunes: 0 },
   activity: { userInputs: 0, reads: 0, writes: 0, searches: 0, images: 0 },
-  tools: { total: 0, names: [] },
+  tools: { count: 0, names: [], total: 0 },
   timing: {
     wallMs: 0, ttftMs: 0, reasoningMs: 0, textMs: 0, toolArgMs: 0, toolsMs: 0, otherMs: 0,
     waitCount: 0, reasoningCount: 0, textCount: 0, toolArgCount: 0, toolCount: 0,
@@ -203,8 +206,10 @@ assert.equal(view.model, 'deepseek-v4')
 // --- projection definition ---------------------------------------------------
 
 assert.equal(contextProjectionDefinition.key, 'mobileContext')
-// v5 adds each request's own `activeMs` for the trend's duration curve.
-assert.equal(contextProjectionDefinition.stateVersion, 5)
+// v5 adds each request's own `activeMs` for the trend's duration curve; v6 adds
+// the command ledger. The version must never decrease, or a host would restore a
+// checkpoint folded by different code.
+assert.equal(contextProjectionDefinition.stateVersion, 6)
 const projectionInit = contextProjectionDefinition.init()
 assert.deepEqual(contextProjectionDefinition.wire.view(projectionInit), contextView(projectionInit))
 assert.equal(contextProjectionDefinition.apply(projectionInit, { type: 'unknown' }), projectionInit)
@@ -485,6 +490,72 @@ assert.equal(
   (await handleContextFleet({ type: 'context-fleet', sessionId: 'root' })).code,
   'context-unavailable',
 )
+
+
+// --- context-insights query --------------------------------------------------
+
+assert.equal((await handleContextInsights({ type: 'context-insights' })).code, 'context-unavailable')
+
+const insightsSessions = [
+  { id: 'ins-a', header: { createdAt: 1000 }, title: '会话 A' },
+  { id: 'ins-b', header: { createdAt: 2000 } },
+]
+const insightsProjections = {
+  snapshot(session) {
+    if (session.id === 'ins-a') {
+      return { values: {
+        title: '会话 A',
+        mobileContext: {
+          model: 'deepseek-v4', provider: 'deepseek', contextWindow: 200000,
+          current: { system: 10, tools: 20, user: 30, inject: 0, skill: 0, assistant: 5, tool: 15 },
+          counts: { toolCalls: 7 }, timing: { wallMs: 90000 },
+        },
+        contextPressure: { pressureTokens: 80, contextWindow: 200000 },
+        sessionStats: { turns: 4, steps: 9 },
+        costMeter: {
+          lastTime: 1700000000000,
+          total: { input: 100, output: 50, cacheRead: 200, cacheWrite: 10 },
+          days: { '2026-10-20': { input: 40, output: 10, cacheRead: 60, cacheWrite: 0 }, '2026-10-21': { input: 60, output: 40, cacheRead: 140, cacheWrite: 10 } },
+        },
+      } }
+    }
+    return { values: { costMeter: { lastTime: 1690000000000, total: { input: 5, output: 5 }, days: {} } } }
+  },
+}
+sessionsSubscriber({
+  sessions: { list: () => insightsSessions },
+  sessionProjections: insightsProjections,
+  effect: (fn) => { fn() },
+})
+const insightsFrame = await handleContextInsights({ type: 'context-insights' })
+assert.equal(insightsFrame.kind, 'context-insights')
+assert.equal(insightsFrame.value.v, 1)
+assert.equal(insightsFrame.value.sessions.length, 2)
+const [first, second] = insightsFrame.value.sessions
+assert.equal(first.id, 'ins-a')
+assert.equal(first.title, '会话 A')
+assert.equal(first.model, 'deepseek-v4')
+assert.equal(first.billedTokens, 360)
+assert.equal(first.inputTokens, 310)
+assert.equal(first.cacheReadTokens, 200)
+assert.equal(first.turns, 4)
+assert.equal(first.steps, 9)
+assert.equal(first.toolCalls, 7)
+assert.equal(first.activeMs, 90000)
+assert.equal(first.pressureTokens, 80)
+assert.equal(first.composition.user, 30)
+assert.equal(second.id, 'ins-b')
+assert.equal(insightsFrame.value.days.length, 2)
+assert.equal(insightsFrame.value.days[0].day, '2026-10-20')
+assert.equal(insightsFrame.value.days[0].tokens, 110)
+
+// A broken listing degrades to context-unavailable.
+sessionsSubscriber({
+  sessions: { list() { throw new Error('boom') } },
+  sessionProjections: insightsProjections,
+  effect: (fn) => { fn() },
+})
+assert.equal((await handleContextInsights({ type: 'context-insights' })).code, 'context-unavailable')
 
 // --- registration ------------------------------------------------------------
 

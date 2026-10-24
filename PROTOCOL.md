@@ -1406,6 +1406,29 @@ Host 提供 `accountController` 服务时，配对连接的 `hello.capabilities`
 - 显示与峰谷设置写入 `$DSH_HOME/storages/weapp-cost-dashboard.json`（可用 `DSH_WEAPP_COST_DASHBOARD_FILE` 覆盖，文件权限 0600）；余额与 Go 额度各缓存 60 秒。
 - 错误为 `kind:error`、`requestType: "cost-meter"`：`bad-request`、`cost-meter-unavailable`、`cost-meter-dashboard-error`、`cost-meter-credential-write-failed`。
 
+## 上下文洞察（`context-insights-v1`）
+
+`context-insights` 聚合 Host 上所有会话的投影，返回跨会话总览：
+
+```json
+{ "type": "context-insights" }
+```
+
+响应：
+
+```json
+{ "kind": "context-insights", "value": { "v": 1, "asOf": 0,
+  "sessions": [{ "id": "session-…", "title": "…", "model": "…", "provider": "…",
+    "billedTokens": 0, "inputTokens": 0, "cacheReadTokens": 0,
+    "turns": 0, "steps": 0, "toolCalls": 0, "activeMs": 0,
+    "contextWindow": 0, "pressureTokens": 0,
+    "composition": { "system": 0, "tools": 0, "user": 0, "inject": 0, "skill": 0, "assistant": 0, "tool": 0 },
+    "lastActive": 0 }],
+  "days": [{ "day": "2026-10-20", "tokens": 0, "time": 0 }] } }
+```
+
+`days` 由各会话 `costMeter` 投影的逐日 token 汇总而来（最近 90 天、北京时间日期键）；会话最多返回最近活跃的 300 个。Host 缺少 `sessionProjections` 服务时返回 `context-unavailable`。
+
 ## 上下文仪表盘与 Agent 编队（`context-dashboard-v1` / `context-fleet-v1` / `context-content-v1`）
 
 网关在 Host 提供 `sessionProjections` 服务时注册纯函数投影 `mobileContext`（key 为 `mobileContext`，`stateVersion` 为 4；旧缓存会整段 refold），把会话事件流折叠为上下文仪表盘数据；`hello.capabilities` 固定声明 `context-dashboard-v1`、`context-fleet-v1` 与 `context-content-v1`。这些请求必须来自已配对设备，其他连接返回 `authentication-required`；Host 未提供所需服务或投影未注册时返回 `context-unavailable`。

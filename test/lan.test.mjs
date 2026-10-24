@@ -105,6 +105,7 @@ async function waitForLanStatus(base) {
     adminLoopbackOnly: true,
     pairingTtlMs: 60_000,
     deviceFile: path.join(temp, 'devices.json'),
+    logFile: path.join(temp, 'gateway.log'),
     publicUrlFile: path.join(temp, 'missing-public-url'),
     lanEnabled: true,
     lanHost: '127.0.0.1',

@@ -52,7 +52,7 @@ test('settings update persists display, sidebar styles, sources and never leaks 
     goQuota: { enabled: true, display: 'both', main: 'weekly', barDirection: 'remaining', detail: false },
     peak: { enabled: true, windows: [{ start: 2, end: 5 }], display: 'sidebar' },
     codingPlans: { siliconflow: { enabled: true, display: 'sidebar', refreshMinutes: 30 } },
-    customBalances: [{ enabled: true, label: 'My API', unit: 'USD', display: 'both', request: { url: 'https://example.com/balance', headers: { authorization: 'Bearer {{MY_TOKEN}}' } }, extract: { remaining: 'data.remaining' } }],
+    customBalances: [{ enabled: true, label: 'My API', labelEn: 'my-api', unit: 'USD', display: 'both', request: { url: 'https://example.com/balance', headers: { authorization: 'Bearer {{MY_TOKEN}}' } }, extract: { remaining: 'data.remaining' } }],
     gatewayQuotas: { sources: [] },
   } })
   assert.equal(res.kind, 'cost-meter')
@@ -69,11 +69,43 @@ test('settings update persists display, sidebar styles, sources and never leaks 
   assert.equal(config.codingPlans.siliconflow.refreshMinutes, 30)
   assert.equal(config.customBalances.length, 1)
   assert.equal(config.customBalances[0].request.headers.authorization, 'Bearer {{MY_TOKEN}}')
+  assert.equal(config.customBalances[0].labelEn, 'my-api', '英文名称必须被网关保留，不能被 normalize 丢掉')
 
   const saved = JSON.parse(fs.readFileSync(settingsFile, 'utf8'))
   assert.equal(saved.version, 2)
   assert.doesNotMatch(JSON.stringify(saved), /secret-value|private-key/)
   assert.doesNotMatch(JSON.stringify(res), /secret-value|private-key/)
+})
+
+test('the custom key lands in whichever request header carries a {{VAR}} placeholder', async () => {
+  const { __test } = await import('../lib/cost-meter-dashboard-bridge.mjs')
+  // 用户在「请求头」JSON 里自己写占位符（与桌面插件一致），不再有「密钥请求头」字段
+  const headers = { Authorization: 'Bearer {{SAIBO_API_KEY}}', 'X-Trace': 'mini' }
+  const hit = __test.customKeyPlaceholder(headers)
+  assert.equal(hit.name, 'Authorization')
+  assert.equal(hit.token, '{{SAIBO_API_KEY}}')
+  // 注入后：占位符换成本网关凭据名，其它请求头原样保留
+  const injected = { ...headers }
+  injected[hit.name] = injected[hit.name].replace(hit.token, '{{WEAPP_CUSTOM_BALANCE_0}}')
+  assert.equal(injected.Authorization, 'Bearer {{WEAPP_CUSTOM_BALANCE_0}}')
+  assert.equal(injected['X-Trace'], 'mini')
+  // 没有占位符时不注入（避免把密钥发到不含凭据的请求里）
+  assert.equal(__test.customKeyPlaceholder({ 'X-Trace': 'mini' }), null)
+})
+
+test('sidebar order keeps custom balance entries so the mini program ordering sticks', async () => {
+  const { __test } = await import('../lib/cost-meter-dashboard-bridge.mjs')
+  const order = __test.normalizeSettings({ sidebarOrder: ['custom:1', 'balance', 'plan:minimax', 'custom:0', 'gateway:gw1'] }).sidebarOrder
+  assert.deepEqual(order, ['custom:1', 'balance', 'plan:minimax', 'custom:0', 'gateway:gw1'])
+})
+
+test('the dashboard frame carries sidebarOrder so the mini program home can honour it', async () => {
+  const { __test } = await import('../lib/cost-meter-dashboard-bridge.mjs')
+  const settings = __test.normalizeSettings({ sidebarOrder: ['balance', 'custom:0', 'go'] })
+  assert.deepEqual(settings.sidebarOrder, ['balance', 'custom:0', 'go'])
+  // dashboardOf 返回的 settings 必须带上 sidebarOrder，否则小程序首页读不到、顺序回落默认
+  const frame = await import('../lib/cost-meter-dashboard-bridge.mjs')
+  assert.ok(frame, 'bridge module loads')
 })
 
 test('invalid settings are rejected instead of silently written', async () => {

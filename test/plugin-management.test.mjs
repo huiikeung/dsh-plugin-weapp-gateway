@@ -1,6 +1,14 @@
 import assert from 'node:assert/strict'
 import { createDshHostAdapter } from '../lib/dsh-host-adapter.mjs'
-import { handleQuery } from '../lib/index.mjs'
+import { handleQuery, setLogFile } from '../lib/index.mjs'
+import os from 'node:os'
+import path from 'node:path'
+import fs from 'node:fs'
+
+// This test drives handleQuery directly and never boots the plugin, so it must
+// redirect the log itself instead of appending to the operator's shared file.
+const logDir = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-plugin-mgmt-'))
+setLogFile(path.join(logDir, 'gateway.log'))
 
 const calls = []
 const gateway = {

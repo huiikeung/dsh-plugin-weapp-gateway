@@ -168,6 +168,7 @@ function expectRejected(url, options = {}) {
     adminLoopbackOnly: true,
     pairingTtlMs: 60_000,
     deviceFile: path.join(temp, 'integration-devices.json'),
+    logFile: path.join(temp, 'gateway.log'),
     publicUrlFile,
   })
   server.listen(0, '127.0.0.1')
@@ -320,6 +321,8 @@ function expectRejected(url, options = {}) {
     'cost-meter-v1',
     'context-dashboard-v1',
     'context-fleet-v1',
+    'context-insights-v1',
+    'context-comms-v1',
     'context-content-v1',
   ])
   const speechCatalog = waitForMessage(pairedSocket, 'speech-catalog')
