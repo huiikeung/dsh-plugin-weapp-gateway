@@ -6,6 +6,14 @@
 
 `dsh-plugin-weapp-gateway` · DeepSeek Harness 移动客户端连接插件
 
+### v0.8.27 · 移动端 App 新协议适配
+
+- 新增 `turn-outline-v1`：会话快照与控制流同步完整轮次大纲，支持客户端按 seq 懒分页定位历史。
+- 新增 `agent-team-v1` / `subagent-conversations-v1`：读取编队与子会话投影；子会话的历史、实时订阅、继续对话、中断和独立待办走带父地址的官方 Host 路由。
+- 新增 `file-upload-v1`：配对设备通过 control 通道分块上传文件，校验长度与 SHA-256 后进入 DSH 官方附件存储；仅 Host 提供流式上传服务时公布能力。
+- 新增 `file-references-v1`：实时/历史消息保留原生文件引用元数据；保留已有工作区文件下载协议，不把附件 ID 当成本机路径。
+- Host Adapter 基线更新为 DSH 0.2.1-rc.2 / Session format 4；移动端 `dsh-mobile-v1` 与 `hello.protocol: 3` 不变。客户端需要按能力单独接入 UI，指南见 [轮次导航](docs/turn-outline-app-integration.md)、[编队与子会话](docs/agent-team-app-integration.md)、[文件上传](docs/file-upload-app-integration.md)。
+
 ### v0.8.23 · 额度设置读取提速
 
 - 修复小程序额度卡片页偶发「读取失败 / 未连接」：`config` 动作改为**只读缓存**，不再在打开设置页时同步请求官方余额/OpenCode Go；慢速账户接口被 8 秒上限兜底，避免整个配置请求超时。
@@ -138,7 +146,7 @@ DeepSeek Harness 的设备鉴权移动连接插件，支持会话与实时事件
 
 ## 协议与 DSH 兼容层
 
-移动端连接的是本项目维护的 `dsh-mobile-v1`，不是 DSH 的内部 Remote 协议。插件内部通过独立 Host Adapter 对接 DSH 0.1.7-rc.2 的 Remote Gateway；Session、Workspace、Settings、Commands、Goals、Schedule、Permission Presets 等 namespace 和严格参数只存在于该适配层。上游 v0.9.0 起新增 Plugin Manager 系列请求帧（经配对设备连接管理插件目录、安装、启停、设置与版本豁免），该组 namespace 只在 DSH 0.2.0 宿主存在：本 fork 已同步协议与实现，在 0.1.7-rc.2 宿主上会返回「管理不可用」而不影响其他功能。请求帧方案见 [DSH 0.2.0 插件管理对接方案](docs/dsh-0.2.0-rc.2-plugin-management-mobile-integration.md)。
+移动端连接的是本项目维护的 `dsh-mobile-v1`，不是 DSH 的内部 Remote 协议。当前 Host Adapter 基线为 DSH 0.2.1-rc.2 / Session format 4；Session、Workspace、Settings、Commands、Goals、Schedule、Permission Presets 与新增上传/子会话路由的 Remote 参数只存在于适配层。旧 Host 不满足本版硬依赖时不能加载此版插件；移动端新增功能仍需按 `hello.capabilities` 判定是否启用。Plugin Manager 系列请求帧经配对设备连接管理插件目录、安装、启停、设置与版本豁免，方案见 [DSH 0.2.0 插件管理对接方案](docs/dsh-0.2.0-rc.2-plugin-management-mobile-integration.md)。
 
 配对鉴权和 `dsh-mobile-v1` / `hello.protocol = 3` 保持不变。新版实时 token 不占用持久事件的 `seq`：客户端显式订阅 `assistantStream: true`，接收原子的 `session-snapshot` 和独立增量；普通 `event` 只携带持久事件。未接入新订阅的客户端只能收到持久消息。
 

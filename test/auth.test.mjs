@@ -10,6 +10,7 @@ const { once } = require('node:events')
 const WebSocket = require('ws')
 const plugin = (await import('../lib/index.mjs')).default
 const { createRegistry } = require('../lib/devices.js')
+const { createTestConnection } = await import('./helpers/peer.mjs')
 
 function waitForMessage(ws, kind) {
   return new Promise((resolve, reject) => {
@@ -116,6 +117,7 @@ function expectRejected(url, options = {}) {
   const changeDiff = { kind: 'text', path: 'src/app.js', display: 'src/app.js',
     before: true, after: true, coarse: false, hunks: [] }
   const ctx = {
+    connection: createTestConnection(),
     inject(names, callback) {
       // Optional host services are injected before workspaceChanges; leave them
       // unbound so this gateway advertises only the capabilities under test.
@@ -304,9 +306,12 @@ function expectRejected(url, options = {}) {
     'session-resume-v1',
     'history-format-version',
     'projection-baseline',
+    'turn-outline-v1',
     'images',
     'session-create',
     'session-agent-preset',
+    'agent-team-v1',
+    'subagent-conversations-v1',
     'wechat-clawbot-control-v2',
     'commands',
     'tasks',
@@ -319,6 +324,7 @@ function expectRejected(url, options = {}) {
     'session-archive',
     'session-rename',
     'file-downloads',
+    'file-references-v1',
     'cost-meter-v1',
     'context-dashboard-v1',
     'context-fleet-v1',

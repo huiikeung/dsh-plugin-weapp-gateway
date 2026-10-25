@@ -7,6 +7,7 @@ import { once } from 'node:events'
 import WebSocket from 'ws'
 import plugin, { Config } from '../lib/index.mjs'
 import { createGatewayState } from '../lib/gateway-state.mjs'
+import { createTestConnection } from './helpers/peer.mjs'
 
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-multi-gateway-'))
@@ -31,6 +32,7 @@ async function start(name, overrides = {}) {
     ...overrides,
   }
   const ctx = {
+    connection: createTestConnection(),
     inject(names) {
       if (names.length === 1 && names[0] === 'accountController') return
       assert.deepEqual(names, ['workspaceChanges'])

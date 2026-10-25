@@ -10,6 +10,7 @@ const path = require('node:path')
 const { once } = require('node:events')
 const WebSocket = require('ws')
 const plugin = (await import('../lib/index.mjs')).default
+const { createTestConnection } = await import('./helpers/peer.mjs')
 
 function expectRejected(url, options = {}) {
   return new Promise((resolve, reject) => {
@@ -73,6 +74,7 @@ async function waitForLanStatus(base) {
     else socket.destroy()
   })
   const ctx = {
+    connection: createTestConnection(),
     inject(names) {
       if (names.length === 1 && names[0] === 'accountController') return
       assert.deepEqual(names, ['workspaceChanges'])

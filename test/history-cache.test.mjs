@@ -4,12 +4,14 @@ import { createHistoryCache, historyCacheKey } from '../lib/history-cache.mjs'
 
 const page = (bytes = 10) => ({ kind: 'history', bytes, events: [] })
 
-test('history cache keys isolate session, cursor and view', () => {
+test('history cache keys isolate session target, cursor and view', () => {
   const base = { beforeSeq: 20, maxMessages: 50, maxBytes: 1024, view: 'conversation' }
   assert.notEqual(historyCacheKey('a', base), historyCacheKey('b', base))
   assert.notEqual(historyCacheKey('a', base), historyCacheKey('a', { ...base, beforeSeq: 10 }))
   assert.notEqual(historyCacheKey('a', base), historyCacheKey('a', { ...base, view: 'context' }))
-  assert.equal(historyCacheKey('a', {}), 'a|tail|||')
+  assert.notEqual(historyCacheKey('a', { ...base, parentSessionId: 'parent', subagentMode: 'continuable' }),
+    historyCacheKey('a', { ...base, parentSessionId: 'other-parent', subagentMode: 'continuable' }))
+  assert.equal(historyCacheKey('a', {}), 'a|||tail|||')
 })
 
 test('history cache expires entries and refreshes LRU recency on reads', () => {

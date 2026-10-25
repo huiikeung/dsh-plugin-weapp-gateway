@@ -1,6 +1,6 @@
 # dsh Mobile Gateway — WebSocket 协议参考
 
-移动端通过经过设备鉴权的 WebSocket 连接与 dsh 通信：订阅 agent 实时输出、发送文字和图片、处理 Human-in-the-loop 提问与操作审批、查询会话/工作区/历史、调整会话配置。本协议由持久化插件 `dsh-plugin-mobile-gateway` 实现。当前源码适配 DSH 0.1.7-rc.2 / Session format 4；移动端实时流接入见 [rc.2 接入说明](docs/dsh-rc2-mobile-integration.md)。插件管理（第 18 节）的 namespace 只在 DSH 0.2.0-rc.2 宿主存在，0.1.7 宿主上 `plugin-catalog` 返回 `managementAvailable: false`，见 [RC2 插件管理对接方案](docs/dsh-0.2.0-rc.2-plugin-management-mobile-integration.md)。
+移动端通过经过设备鉴权的 WebSocket 连接与 dsh 通信：订阅 Agent 实时输出、发送文字、图片和文件、查看轮次大纲及编队/子智能体会话、处理 Human-in-the-loop 提问与操作审批、查询会话/工作区/历史、调整会话配置。本插件当前基线为 DSH 0.2.1-rc.2 / Session format 4，移动端实时流接入见 [rc.2 接入说明](docs/dsh-rc2-mobile-integration.md)。插件管理（第 18 节）的 Remote namespace 需 DSH 0.2.0-rc.2 或更新宿主；最新的轮次导航、编队/子会话和文件上传扩展见本文末尾及其 [App 接入指南](docs/turn-outline-app-integration.md)、[编队接入指南](docs/agent-team-app-integration.md)、[文件上传接入指南](docs/file-upload-app-integration.md)。
 
 - **本机端点**：`ws://127.0.0.1:3080/ws/mobile`（与 dsh web GUI 同端口）
 - **局域网端点**：`ws://<电脑的私有局域网 IP>:3081/ws/mobile`（插件独立监听，只提供经过鉴权的 WebSocket）
@@ -79,7 +79,7 @@ const pairingText = Buffer.from(JSON.stringify(payload), 'utf8').toString('base6
 ```json
 { "kind": "paired", "token": "<长期设备 token>",
   "device": { "id": "...", "name": "iPhone", "createdAt": 1787111700000 } }
-{ "kind": "hello", "protocol": 3, "capabilities": ["split-channels", "images", "commands", "tasks", "goals", "session-cancel", "queue-control", "session-archive", "session-rename", "file-downloads"], "authenticated": true,
+{ "kind": "hello", "protocol": 3, "capabilities": ["split-channels", "images", "commands", "tasks", "goals", "turn-outline-v1", "agent-team-v1", "subagent-conversations-v1", "file-upload-v1", "file-references-v1", "session-cancel", "queue-control", "session-archive", "session-rename", "file-downloads"], "authenticated": true,
   "device": { "id": "...", "name": "iPhone" }, "port": 3080, "clients": 1 }
 ```
 
@@ -1064,7 +1064,7 @@ Control/旧单连接接收全局模式状态增量，不受所订阅会话过滤
 | kind | 触发时机 |
 |---|---|
 | `paired` | 首次配对成功；仅此一次返回长期设备 token |
-| `hello` | 连接成功：`{ "kind":"hello", "protocol":3, "capabilities":["split-channels","images","commands","tasks","goals","session-cancel","queue-control","session-archive","session-rename","file-downloads"], "authenticated":true, "port":3080, "clients":1 }` |
+| `hello` | 连接成功：`{ "kind":"hello", "protocol":3, "capabilities":["split-channels","images","commands","tasks","goals","turn-outline-v1","agent-team-v1","subagent-conversations-v1","file-upload-v1","file-references-v1","session-cancel","queue-control","session-archive","session-rename","file-downloads"], "authenticated":true, "port":3080, "clients":1 }` |
 | `event` | 任意会话的 agent 输出（见下） |
 | `session-queues` / `session-queue` | Host 队列完整快照 / 单个 Session 队列替换值 |
 | `session-archives` | Host 的完整 Session 归档集合在连接初始化或 WebUI/App 归档后变化 |
@@ -1507,3 +1507,21 @@ v2 additive 字段（旧客户端可忽略）：
 `context-fleet` 需要 Host 的 `sessions` + `sessionProjections` 服务；只把 `origin: "subagent"` 的会话当作子节点，fork 只是共享谱系的独立会话，只在当前会话的祖先链中出现。家族最多 40 个成员，当前会话始终可见。
 
 错误统一为 `kind:error`：`authentication-required`、`bad-request`（缺少 `sessionId`）、`context-unavailable`（Host 未提供所需服务或投影未注册）。客户端应把 `context-unavailable` 当作当前 Host 不支持该项并隐藏入口。
+
+## 移动端轮次大纲（`turn-outline-v1`）
+
+网关将 Host 的 `turnOutline` 会话投影原样保留在 `history` / `session-snapshot` 的 `projections.values.turnOutline`，并在控制流基线中发送。更新帧 `turn-outline-updated` 携带完整数组及 `asOfSeq`，客户端按会话整体替换，不按数组下标追加；该帧发给控制连接和 legacy 单连接，不发给 conversation 连接。`[]` 表示已知空列表，`null` 表示 Host 未提供此投影。Host 是否挂载 turn-outline 投影需单独确认。
+
+轮次导航只需加载大纲和当前聊天窗口；点击未加载的轮次后仍通过 `history` 的 `beforeSeq` 分页读取正文。不要把大纲的 `asOfSeq` 用作实时事件游标。完整字段、重连代际、跳转、分页与滚动锚点规则见 [轮次导航 App 接入指南](docs/turn-outline-app-integration.md)。
+
+## Agent 编队与子会话（`agent-team-v1` / `subagent-conversations-v1`）
+
+控制连接可发送 `{ "type":"agent-team", "sessionId":"<lead>" }` 或 `{ "type":"subagents", "sessionId":"<parent>" }`；响应包含 `projectionState`、`asOfSeq` 和 `agentTeam` / `subagentCatalog`。更新通过 `agent-team-updated`、`subagents-updated`、`subagent-identity-updated`、`subagent-timing-updated` 完整投影帧通知。
+
+子智能体页面使用 `sessionId` 表示当前子会话，并同时携带直接父级 `parentSessionId` 与 `subagentMode`（`continuable` / `one-shot` / `unknown`）到 `subscribe`、`history`、`tasks`、`goal`、`message` 和 `session-cancel`。仅 `continuable` 子会话支持消息和中断；上传文件不支持子会话。团队共享任务（`agentTeam.tasks`）与成员自己的 `todos` 是不同数据。完整地址、更新和交互规则见 [Agent 编队与子会话 App 接入指南](docs/agent-team-app-integration.md)。
+
+## 普通文件上传与引用（`file-upload-v1` / `file-references-v1`）
+
+文件上传必须来自配对设备；上传分块请求位于 control 通道，并通过 `file-upload-open`、`file-upload-chunk`、`file-upload-finish`、`file-upload-cancel` 完成。网关校验大小、偏移与 SHA-256 后，把数据流交给 DSH 官方附件存储。只有收到 `file-upload-completed.receiptId` 后，客户端才可在 conversation 通道的 `message.files: [{"receiptId":"..."}]` 提交；`requestId` 必填。上传凭证仅绑定目标普通会话，不能传入任意路径或用于子智能体。
+
+`file-references-v1` 表示实时与历史数据可以含原生文件引用；持久消息位于 Session 文件内容块，实时 `user/message` 额外含轻量 `files` 数组。此能力不等于提供任意附件下载：现有 `file-download-*` 读取会话工作目录文件，不能将 `attachmentId` 当路径。分块限制、生命周期和恢复策略见 [文件上传 App 接入指南](docs/file-upload-app-integration.md)。

@@ -308,6 +308,13 @@ const ctx = {
   effect(fn) { disposers.push(fn()) },
 }
 ctx.webServer = webServer
+ctx.connection = {
+  createPeer() {
+    const controller = new AbortController()
+    return { id: 'gateway-test-peer', principal: { kind: 'owner' }, interactions: 'none',
+      signal: controller.signal, async dispose() { controller.abort() } }
+  },
+}
 const invokeCalls = []
 const controlFrames = []
 const workspaceFrames = []
@@ -635,9 +642,15 @@ function waitFor(pred, timeout) { return new Promise((res) => { const t0 = Date.
       assert.equal(controls.find(f => f.kind === 'hello').capabilities.includes('schedule-management'), true)
       assert.equal(controls.find(f => f.kind === 'hello').capabilities.includes('plugin-management-v1'), true)
       assert.equal(controls.find(f => f.kind === 'hello').capabilities.includes('wechat-clawbot-control-v2'), true)
-      // Fork pin: this deployment runs DSH 0.1.7-rc.2; the capability list is
+      assert.equal(controls.find(f => f.kind === 'hello').capabilities.includes('turn-outline-v1'), true)
+      assert.equal(controls.find(f => f.kind === 'hello').capabilities.includes('agent-team-v1'), true)
+      assert.equal(controls.find(f => f.kind === 'hello').capabilities.includes('subagent-conversations-v1'), true)
+      assert.equal(controls.find(f => f.kind === 'hello').capabilities.includes('file-references-v1'), true)
+      assert.equal(controls.find(f => f.kind === 'hello').capabilities.includes('file-upload-v1'), false,
+        'file upload is advertised only when the Host exposes its official streaming route')
+      // The current Host baseline is DSH 0.2.1-rc.2; mobile wire protocol stays
       // still advertised (the panel degrades gracefully on older hosts).
-      assert.equal(controls.find(f => f.kind === 'hello').dshVersion, '0.1.7-rc.2')
+      assert.equal(controls.find(f => f.kind === 'hello').dshVersion, '0.2.1-rc.2')
       control.send(JSON.stringify({ type: 'plugin-catalog', requestId: 'unauthenticated-catalog' }))
       assert.equal(await waitFor(() => controls.some(f => f.requestId === 'unauthenticated-catalog'), 2000), true)
       assert.equal(controls.find(f => f.requestId === 'unauthenticated-catalog').code, 'authentication-required')
@@ -1024,11 +1037,16 @@ function waitFor(pred, timeout) { return new Promise((res) => { const t0 = Date.
     type: 'user/message',
     seq: 88,
     time: 88,
-    data: { id: 'user-live-88', content: [{ type: 'image', attachment: { attachmentId: 'att-live', mediaType: 'image/jpeg', bytes: 12, width: 3, height: 4, name: 'live.jpg' } }, { type: 'text', text: 'live image' }], source: { kind: 'user' } },
+    data: { id: 'user-live-88', content: [
+      { type: 'image', attachment: { attachmentId: 'att-live', mediaType: 'image/jpeg', bytes: 12, width: 3, height: 4, name: 'live.jpg' } },
+      { type: 'file', attachment: { attachmentId: 'file-live', name: 'report.pdf', bytes: 24 } },
+      { type: 'text', text: 'live image' },
+    ], source: { kind: 'user' } },
   })
   const liveImageReady = await waitFor(() => got.some((m) => m.kind === 'event' && m.seq === 88), 2000)
   const liveImageEvent = got.find((m) => m.kind === 'event' && m.seq === 88)
   interactionResults.push(['live image reference', liveImageReady && liveImageEvent.event.images[0].attachmentId === 'att-live' && liveImageEvent.event.text === 'live image'])
+  interactionResults.push(['live file reference', liveImageReady && liveImageEvent.event.files[0].attachmentId === 'file-live' && liveImageEvent.event.files[0].name === 'report.pdf'])
   interactionResults.push(['live user message identity', liveImageReady && liveImageEvent.event.raw?.id === 'user-live-88'])
   listeners['session/event']({ id: 's1' }, {
     type: 'command/run',
