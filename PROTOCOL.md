@@ -703,7 +703,7 @@ WebUI、App 或其他客户端造成的变化通过以下帧主动推送：
 - 图片不会内联进历史页。`user/message.data.content[]` 中的图片块为 `{ "type":"image", "attachment": ImageAttachmentRef }`；iOS 使用其中的 `attachmentId` 请求图片数据
 - `maxBytes`：单帧字节预算，默认 **4 MiB**；超预算保留最新部分并给出 `nextBeforeSeq` 续页（客户端 16 MiB 上限的安全余量）
 - `view: "conversation"`：**对话裁剪模式**——隐藏系统消息与 request/header、request/context，移除 Assistant 事件的内嵌 `data.stream`，`tool/result` 文本截断到 2000 字符
-- 分页：`hasMore` 为真时用 `beforeSeq: nextBeforeSeq, historyFormatVersion: 4` 请求更早一页
+- 分页：`hasMore` 为真时用 `beforeSeq: nextBeforeSeq, historyFormatVersion: 4` 请求更早一页；分页响应回显请求的 `beforeSeq`，即使本页为空，客户端也能结束正确的分页请求而不误认成尾部刷新
 
 ```json
 → { "kind": "history", "sessionId": "session-abc", "events": [ ...原始事件... ],

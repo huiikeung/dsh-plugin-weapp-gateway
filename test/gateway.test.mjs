@@ -88,7 +88,8 @@ const assert = await import('node:assert/strict')
   }
   assert.equal(historyCalls, 2)
   assert.equal(forkCalls, 0)
-  await handleQuery(api, null, null, { type: 'history', sessionId: 's1', beforeSeq: 2, historyFormatVersion: 4 })
+  const olderPage = await handleQuery(api, null, null, { type: 'history', sessionId: 's1', beforeSeq: 2, historyFormatVersion: 4 })
+  assert.equal(olderPage.beforeSeq, 2, 'an empty page can still be correlated with its cursor')
   await handleQuery(api, null, null, { type: 'fork', sessionId: 's1', atSeq: 2, historyFormatVersion: 4 })
   assert.equal(historyCalls, 3)
   assert.equal(forkCalls, 1)
@@ -97,6 +98,34 @@ const assert = await import('node:assert/strict')
   const hidden = await handleQuery(api, null, null, { type: 'history', sessionId: 's1', view: 'conversation' })
   assert.deepEqual(hidden.events, [])
   assert.equal(hidden.nextBeforeSeq, 10)
+}
+
+// Subagent history must carry the durable parent address, and history errors
+// must echo the requested sessionId so a mobile inspector can attribute them
+// instead of waiting for its own timeout.
+{
+  const payloads = []
+  const api = { sessions: {
+    history: async (payload) => {
+      payloads.push(payload)
+      return { historyFormatVersion: 4, cursor: 1, hasMore: false, projections: { asOfSeq: 1, values: {} },
+        events: [{ event: { type: 'assistant/message', seq: 1, time: 1, data: { turn: 1, step: 0, message: { content: [{ type: 'text', text: 'child answer' }] } } } }] }
+    },
+  } }
+  const page = await handleQuery(api, null, null, { type: 'history', sessionId: 'child', parentSessionId: 'root', mode: 'continuable', maxMessages: 20, maxBytes: 262144, view: 'conversation' })
+  assert.equal(page.sessionId, 'child')
+  assert.equal(page.events.length, 1)
+  assert.deepEqual(payloads.at(-1), { sessionId: 'child', parentSessionId: 'root', mode: 'continuable', maxMessages: 20 })
+  // Plain sessions stay on the bare session address.
+  await handleQuery(api, null, null, { type: 'history', sessionId: 'plain', view: 'conversation' })
+  assert.equal(payloads.at(-1).parentSessionId, undefined)
+  // Failures keep the sessionId: the host never echoes it on proxyQuery errors.
+  api.sessions.history = async () => { throw Object.assign(new Error('subagent Sessions require their durable parent address'), { code: 'session/agent-busy' }) }
+  const failed = await handleQuery(api, null, null, { type: 'history', sessionId: 'child', view: 'conversation' })
+  assert.equal(failed.kind, 'error')
+  assert.equal(failed.code, 'session/agent-busy')
+  assert.equal(failed.sessionId, 'child')
+  assert.equal(failed.requestType, 'history')
 }
 
 const directoryTestRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-mobile-directory-'))
@@ -440,6 +469,7 @@ plugin.apply(ctx, {
 assert.deepEqual(injectedServices, [
   ['sessionProjections'],
   ['sessions', 'sessionProjections'],
+  ['sessionQuery'],
   ['agents'],
   // Cost meter registers its own `costMeter` projection plus the services the
   // summary query reads; both are optional and lifecycle-bound.

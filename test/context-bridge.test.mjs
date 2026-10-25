@@ -6,6 +6,7 @@ import {
   contextProjectionDefinition,
   contextView,
   createState,
+  handleContextComms,
   handleContextContent,
   handleContextFleet,
   handleContextInsights,
@@ -237,6 +238,28 @@ const fleetSnapshots = {
   },
 }
 const fleet = buildFleetValue('child-a', fleetRecords, (id) => fleetSnapshots[id] ?? null, (id) => id === 'child-b')
+
+// The task board carries the host `description` (the instructions shown under
+// each subject); it must reach the client, bounded.
+const teamFleet = buildFleetValue('root', fleetRecords, (id) => (id === 'root'
+  ? { agentTeam: {
+      members: [],
+      tasks: [
+        { id: 't1', subject: 'Extract dsh-mobile session spec', description: 'Read the iOS app source at /tmp/dsh-mobile. Focus ONLY on the session/conversation page.', status: 'completed' },
+        { id: 't2', subject: 'Short', description: 'ok', status: 'pending' },
+        { id: 't3', subject: 'No description', status: 'pending' },
+        { id: 't4', subject: 'Truncated', description: 'x'.repeat(900), status: 'pending' },
+      ],
+      failure: '',
+    } }
+  : null), () => false)
+assert.equal(teamFleet.team.tasks.length, 4)
+assert.deepEqual(teamFleet.team.tasks.map(task => [task.id, task.subject, task.description, task.status]), [
+  ['t1', 'Extract dsh-mobile session spec', 'Read the iOS app source at /tmp/dsh-mobile. Focus ONLY on the session/conversation page.', 'completed'],
+  ['t2', 'Short', 'ok', 'pending'],
+  ['t3', 'No description', undefined, 'pending'],
+  ['t4', 'Truncated', 'x'.repeat(400), 'pending'],
+], 'descriptions ride through, capped, and stay optional')
 assert.equal(fleet.rootSessionId, 'root')
 assert.equal(fleet.currentSessionId, 'child-a')
 assert.deepEqual(fleet.agents.map(agent => [agent.sessionId, agent.depth, agent.isCurrent, agent.isRoot, agent.running]), [
@@ -260,6 +283,42 @@ assert.equal(childA.turns, 2)
 assert.equal(childA.steps, 3)
 assert.equal(childA.activeMs, 500)
 assert.deepEqual(childA.composition, { system: 10, tools: 2, user: 3, inject: 0, skill: 0, assistant: 4, tool: 5, total: 24 })
+
+const taskNamesFleet = buildFleetValue('root', [
+  { id: 'root' },
+  { id: 'catalog-child', parentSessionId: 'root', origin: 'subagent', title: 'Catalog task' },
+  { id: 'labeled-child', parentSessionId: 'root', origin: 'subagent', title: 'Catalog fallback' },
+], (id) => id === 'catalog-child'
+  ? { title: 'Generic conversation title' }
+  : id === 'labeled-child'
+    ? { title: 'Another generic title', subagent: { label: 'Actual task name' } }
+    : null, () => false)
+assert.equal(taskNamesFleet.agents.find(agent => agent.sessionId === 'catalog-child').title, 'Catalog task')
+assert.equal(taskNamesFleet.agents.find(agent => agent.sessionId === 'labeled-child').title, 'Actual task name')
+
+const nativeProjectionFleet = buildFleetValue('native-child', [
+  { id: 'native-root' },
+  { id: 'native-child', parentSessionId: 'native-root', origin: 'subagent' },
+], (id) => id === 'native-child' ? {
+  contextTimeline: {
+    contextWindow: 128000,
+    current: { system: 1, user: 2, total: 600 },
+    last: { prompt: 700, total: 550 },
+    counts: { steps: 8 },
+    cost: { provider: { model: {
+      peak: { uncached: 1000, cacheRead: 200, cacheWrite: 100, output: 500 },
+      off: { uncached: 1200, cacheRead: 300, cacheWrite: 100, output: 400 },
+    } } },
+  },
+  subagentTiming: { lastTurnCompleted: false, settledMs: 4000 },
+} : null, () => false)
+const nativeChild = nativeProjectionFleet.agents.find(agent => agent.sessionId === 'native-child')
+assert.equal(nativeChild.pressureTokens, 750, 'falls back to DSH headline anchor plus current movement')
+assert.equal(nativeChild.tokensTotal, 3800, 'uses DSH billing ledger, not context occupancy')
+assert.equal(nativeChild.contextTokens, 600)
+assert.equal(nativeChild.steps, 8)
+assert.equal(nativeChild.activeMs, 4000)
+assert.equal(nativeChild.completed, undefined, 'a stopped subagent without a normal-completion signal stays incomplete')
 
 // A fork is not a subagent edge, but the current fork must still render after
 // its ancestor chain.
@@ -433,43 +492,90 @@ assert.deepEqual(
 const injectCalls = []
 let sessionsSubscriber
 let agentsSubscriber
+let sessionQuerySubscriber
 const serviceCtx = {
   inject(names, callback) {
     injectCalls.push([...names])
     if (names[0] === 'sessions') sessionsSubscriber = callback
+    else if (names[0] === 'sessionQuery') sessionQuerySubscriber = callback
     else agentsSubscriber = callback
   },
 }
 assert.equal(registerContextServices(serviceCtx), true)
-assert.deepEqual(injectCalls, [['sessions', 'sessionProjections'], ['agents']])
+assert.deepEqual(injectCalls, [['sessions', 'sessionProjections'], ['sessionQuery'], ['agents']])
 assert.equal(typeof sessionsSubscriber, 'function')
+assert.equal(typeof sessionQuerySubscriber, 'function')
 assert.equal(typeof agentsSubscriber, 'function')
 
 const hostSessions = [
-  { id: 'root', header: { createdAt: 1 } },
+  { id: 'root', header: { createdAt: 1 }, title: 'Root' },
   { id: 'child', header: { parentSession: 'root', origin: 'subagent', createdAt: 2 } },
 ]
 const effects = []
 const hostProjections = {
   snapshot(session) {
-    return session.id === 'child'
-      ? { values: { subagent: { mode: 'continuable' }, mobileContext: { current: { user: 3 } } } }
-      : { values: {} }
+    if (session.id === 'root') return { values: {
+      contextTimeline: {
+        current: { system: 10, user: 20, total: 30 },
+        counts: { steps: 7 },
+        timing: { wallMs: 5000 },
+        last: { prompt: 100, total: 120 },
+      },
+      contextPressure: { projectedTokens: 110, contextWindow: 200000 },
+      subagentCatalog: [
+        { id: 'child', label: 'Warm child', createdAt: 2 },
+        { id: 'cold-child', label: 'Cold child', createdAt: 3 },
+      ],
+    } }
+    if (session.id === 'child') return { values: {
+      subagent: { mode: 'continuable' },
+      contextTimeline: { current: { user: 3, total: 3 }, counts: { steps: 2 } },
+      tokenUsage: { uncachedInputTokens: 10, cacheReadTokens: 5, cacheWriteTokens: 1, outputTokens: 4 },
+    } }
+    return { values: {} }
   },
 }
+const coldValues = {
+  contextTimeline: { current: { assistant: 12, total: 12 }, counts: { steps: 4 }, timing: { wallMs: 9000 } },
+  contextPressure: { pressureTokens: 15, contextWindow: 100000 },
+  subagent: { mode: 'one-shot', label: 'Cold child' },
+}
 sessionsSubscriber({
-  sessions: { list: () => hostSessions },
+  sessions: { list: () => hostSessions, get: () => null },
   sessionProjections: hostProjections,
+  effect: (fn) => { effects.push(fn()) },
+})
+sessionQuerySubscriber({
+  sessionQuery: {
+    async observeSession(id) {
+      if (id !== 'cold-child') return null
+      return {
+        header: { id, parentSession: 'root', origin: 'subagent', createdAt: 3 },
+        projections: { values: coldValues },
+        [Symbol.dispose]() {},
+      }
+    },
+  },
   effect: (fn) => { effects.push(fn()) },
 })
 const fleetFrame = await handleContextFleet({ type: 'context-fleet', sessionId: 'child' })
 assert.equal(fleetFrame.kind, 'context-fleet')
 assert.equal(fleetFrame.sessionId, 'child')
 assert.equal(fleetFrame.value.rootSessionId, 'root')
-assert.deepEqual(fleetFrame.value.agents.map(agent => agent.sessionId), ['root', 'child'])
+assert.deepEqual(fleetFrame.value.agents.map(agent => agent.sessionId), ['root', 'child', 'cold-child'])
+assert.deepEqual(fleetFrame.value.agents.map(agent => agent.title), ['Root', 'Warm child', 'Cold child'],
+  'catalog labels repair already-listed sessions and remain visible as task titles')
 assert.equal(fleetFrame.value.agents[1].mode, 'continuable')
 assert.deepEqual(fleetFrame.value.agents[1].composition, { system: 0, tools: 0, user: 3, inject: 0, skill: 0, assistant: 0, tool: 0, total: 3 })
-assert.equal(effects.length, 1)
+assert.equal(fleetFrame.value.counts.agents, 3)
+assert.equal(fleetFrame.value.counts.subagents, 2)
+assert.equal(fleetFrame.value.agents[0].pressureTokens, 110, 'headline context comes from DSH pressure projection')
+assert.equal(fleetFrame.value.agents[0].tokensTotal, undefined, 'context headline is not billed usage')
+assert.equal(fleetFrame.value.agents[0].steps, 7)
+assert.equal(fleetFrame.value.agents[2].pressureTokens, 15, 'cold Agent uses its DSH projection snapshot')
+assert.equal(fleetFrame.value.agents[2].steps, 4)
+assert.equal(fleetFrame.value.agents[2].tokensTotal, undefined, 'missing billing data stays missing')
+assert.equal(effects.length, 2)
 
 // A non-array session listing degrades to an empty family.
 sessionsSubscriber({
@@ -578,3 +684,44 @@ projectionSubscriber({
 assert.deepEqual(projectionRegistrations, [contextProjectionDefinition])
 
 console.log('context bridge tests passed')
+
+// 子 Agent 会话必须带 durable parent address + 匹配 mode 才可读：
+// 不传地址时宿主拒绝，扫描结果只剩父会话（通讯记录永远为空）。
+{
+  const calls = []
+  const api = {
+    sessions: {
+      history: async (payload) => {
+        calls.push(payload)
+        const isChild = payload.sessionId.startsWith('child')
+        if (isChild && (payload.parentSessionId !== 'parent' || payload.mode === undefined)) {
+          throw new Error('subagent Sessions require their durable parent address')
+        }
+        const text = isChild ? 'completed the task' : ''
+        return {
+          title: payload.sessionId,
+          events: text === '' ? [] : [{
+            type: 'user/message',
+            seq: 1,
+            time: 1000,
+            data: { source: { kind: 'subagent-settled', summary: text, senderSessionId: payload.sessionId }, content: [{ type: 'text', text }] },
+          }],
+        }
+      },
+    },
+  }
+  const withoutAddress = await handleContextComms(api, { type: 'context-comms', sessionIds: ['parent', 'child1'] })
+  assert.equal(withoutAddress.value.scanned, 1)
+  assert.equal(withoutAddress.value.total, 0)
+  const withAddress = await handleContextComms(api, {
+    type: 'context-comms',
+    sessionIds: ['parent', 'child1'],
+    sessions: [{ id: 'child1', parentSessionId: 'parent', mode: 'continuable' }],
+  })
+  assert.equal(withAddress.value.scanned, 2)
+  assert.equal(withAddress.value.total, 1)
+  assert.equal(withAddress.value.messages[0].to, 'child1')
+  assert.equal(withAddress.value.messages[0].from, 'child1')
+  assert.ok(calls.some((call) => call.parentSessionId === 'parent' && call.mode === 'continuable'))
+  console.log('context bridge comms addressing tests passed')
+}
