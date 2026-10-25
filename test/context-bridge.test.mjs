@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import {
   CONTEXT_REQUEST_TYPES,
   applyContextEvent,
+  buildCommsValue,
   buildFleetValue,
   contextProjectionDefinition,
   contextView,
@@ -498,11 +499,11 @@ const serviceCtx = {
     injectCalls.push([...names])
     if (names[0] === 'sessions') sessionsSubscriber = callback
     else if (names[0] === 'sessionQuery') sessionQuerySubscriber = callback
-    else agentsSubscriber = callback
+    else if (names[0] === 'agents') agentsSubscriber = callback
   },
 }
 assert.equal(registerContextServices(serviceCtx), true)
-assert.deepEqual(injectCalls, [['sessions', 'sessionProjections'], ['sessionQuery'], ['agents']])
+assert.deepEqual(injectCalls, [['sessions', 'sessionProjections'], ['sessionQuery'], ['agents'], ['skills'], ['agentPresets']])
 assert.equal(typeof sessionsSubscriber, 'function')
 assert.equal(typeof sessionQuerySubscriber, 'function')
 assert.equal(typeof agentsSubscriber, 'function')
@@ -651,6 +652,8 @@ assert.equal(first.activeMs, 90000)
 assert.equal(first.pressureTokens, 80)
 assert.equal(first.composition.user, 30)
 assert.equal(second.id, 'ins-b')
+assert.equal(second.billedTokens, 10, 'legacy costMeter remains the usage fallback')
+assert.equal(second.lastActive, 1690000000000, 'legacy ledger retains its activity timestamp')
 assert.equal(insightsFrame.value.days.length, 2)
 assert.equal(insightsFrame.value.days[0].day, '2026-10-20')
 assert.equal(insightsFrame.value.days[0].tokens, 110)
@@ -724,4 +727,30 @@ console.log('context bridge tests passed')
   assert.equal(withAddress.value.messages[0].from, 'child1')
   assert.ok(calls.some((call) => call.parentSessionId === 'parent' && call.mode === 'continuable'))
   console.log('context bridge comms addressing tests passed')
+}
+
+{
+  const value = buildCommsValue([
+    { id: 'parent', title: 'Parent', events: [] },
+    {
+      id: 'child', title: 'Child', parentSessionId: 'parent', mode: 'continuable',
+      projections: { values: { subagentTiming: { lastTurnCompleted: true } } },
+      events: [
+        { type: 'tool/call', seq: 10, time: 10000, data: {
+          callId: 'send-ok', name: 'send_message',
+          arguments: JSON.stringify({ agent_id: 'parent', message: 'actual DSH private message' }),
+        } },
+        { type: 'tool/result', seq: 11, time: 10001, data: {
+          message: { source: { callId: 'send-ok' }, content: [{ type: 'text', text: 'accepted' }] },
+        } },
+        { type: 'turn/end', seq: 12, time: 11000, data: { reason: { kind: 'completed' } } },
+      ],
+    },
+  ])
+  assert.deepEqual(value.messages.map((message) => [message.kind, message.from, message.to]), [
+    ['settled', 'child', 'parent'],
+    ['relay', 'child', 'parent'],
+  ])
+  assert.equal(value.messages[1].text, 'actual DSH private message')
+  console.log('context bridge comms parses send_message and completed child reports')
 }

@@ -44,10 +44,13 @@ assert.equal(catalog.bundles.length, 2)
 assert.equal(catalog.bundles[0].experimental, true)
 assert.equal(catalog.bundles[1].experimental, false)
 assert.equal(catalog.bundles[0].name, '@deepseek-ai/dsh-experimental-agent-team')
-assert.deepEqual(catalog.officialItems, [
-  { id: 'shell', namespaces: ['bash-sandbox'] },
-  { id: 'web-search', namespaces: ['web-search-deepseek'] },
+// 官方项图标与默认图标随目录下发（与 DSH 客户端注册表一致）
+assert.deepEqual(catalog.officialItems.map(item => ({ id: item.id, namespaces: item.namespaces, hasIcon: typeof item.icon === 'string' && item.icon.length > 0 })), [
+  { id: 'shell', namespaces: ['bash-sandbox'], hasIcon: true },
+  { id: 'web-search', namespaces: ['web-search-deepseek'], hasIcon: true },
 ])
+assert.equal(typeof catalog.defaultPluginIcon, 'string')
+assert.ok(catalog.defaultPluginIcon.startsWith('<svg'))
 assert.deepEqual((await query({ type: 'plugin-registries', requestId: 'registries-1' })).fallbackRegistries, [])
 assert.deepEqual(await query({ type: 'plugin-inspect', requestId: 'inspect-1', spec: 'example', registry: null }), {
   kind: 'plugin-inspection', requestId: 'inspect-1',
