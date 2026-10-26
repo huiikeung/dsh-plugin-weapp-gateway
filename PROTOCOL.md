@@ -99,11 +99,23 @@ const pairingText = Buffer.from(JSON.stringify(payload), 'utf8').toString('base6
 | `gatewayId` | 配对载荷、`paired`、`hello`、`GET /mgw/status` | 持久化 UUID v4；同一网关各访问地址、双通道及重启前后相同 |
 | `gatewayName` | 同上 | 展示名称，允许改变，不能作为身份或鉴权依据 |
 | `endpoints` | 配对载荷、`GET /mgw/status` | 规范化去重的 URL 字符串数组；不在 `hello` 或 `paired` 返回 |
+| `routes` | 配对载荷 | 可选的分类路由表（见下），客户端按自身网络能力自动选路；不在 `hello`、`paired` 或 `GET /mgw/status` 返回 |
 
 配对仍保留 `publicUrl`，且它排在本次 `endpoints` 第一项。其后按本机配对请求 `endpoints`、插件配置 `endpoints`、公网配置、已取得的 Cloudflare Tunnel 地址、已监听 LAN 地址的顺序合并。每个输入列表及合并结果最多 16 项，每项最多 2048 字符。允许 HTTP(S) 输入并转为 WS(S)，拒绝凭证、query、fragment、未指定监听地址及公网明文 WS。
 
 `POST /mgw/pair` 可额外传入 `endpoints: string[]`，只用于本次配对，不写入配置。移动端对新地址必须在发送凭证前建立信任；`hello` 的 ID 校验发生在鉴权后，不能替代 TLS 和地址确认。多个网关的 token 独立签发、保存和撤销；App 以网关连接上下文路由原有业务请求。
 
+路由表 `routes` 把候选地址按客户端能力分成三族，客户端各自只拨自己可用的线路，无需用户判断当前网络：
+
+| 字段 | 内容 | 使用方 |
+|---|---|---|
+| `lan` | `ws://`（或 `wss://`）私网/本机地址，规范化去重，最多 16 项 | 小程序与 App |
+| `public` | `wss://` 公网地址（用户自己的域名/反代/Cloudflare Tunnel） | 仅 App |
+| `relay` | `{ relay, nodeId, agentPubKey, gatewayName?, authMode: "gateway" }`；`relay` 必须是公网 `wss://`，`nodeId` 8–128 位 URL 安全字符，`agentPubKey` 为 32 字节 Base64；客户端连接地址为 `relay` 去尾斜杠后拼 `/c/` + `nodeId` | 仅小程序 |
+
+选路规则：微信小程序的 socket 必须命中合法域名，运营者自己的公网直连地址基本不可用，因此小程序的公网线路是中继；多端 App 与原生 App 没有合法域名限制、也没有微信登录换不到中继租赁，因此只拨公网直连。两端都以「上次真正连通的地址」为第一候选，中继取不到租赁时继续回退局域网候选（配对码仍然有效）。小程序手动输入的公网地址会被客户端直接拒绝并给出说明，不进入候选链。
+
+`miniProgramRoute` 是早期版本给旧小程序的等价字段（`{ mode: "direct", publicUrl, endpoints }` 或 `{ mode: "relay", relay, nodeId, agentPubKey, gatewayName }`），继续随载荷输出；新客户端应优先读取 `routes`。
 本机管理接口 `POST /mgw/gateway` 接受 `{"mode":"disabled|temporary|persistent"}` 中的一个具体值，例如 `{"mode":"persistent"}`。兼容旧 `{"enabled":true}`（临时开启）与 false（关闭）；不能同时传 `mode` 和 `enabled`。返回 `gatewayEnabled`、`gatewayMode`、`waitExpiresAt`、`connectedClients`。参数错误返回 400；保存失败返回 500 且不改变当前运行模式。
 
 `GET /mgw/status` 增加身份、地址列表及 `gatewayMode`。模式的持久化不影响配对码有效期和文件传输超时。自动超时关闭若遇到磁盘写入失败，会保持当前进程关闭并记录错误；重启可能仍按旧保存模式运行，需修复存储后再次保存选择。

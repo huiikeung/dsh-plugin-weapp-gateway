@@ -536,6 +536,15 @@ function expectRejected(url, options = {}) {
   assert.equal(directPayload.version, 2)
   assert.equal(directPayload.publicUrl, wsUrl)
   assert.equal('mode' in directPayload, false)
+  assert.deepEqual(directPayload.routes.lan,
+    directPayload.endpoints.filter(endpoint => !endpoint.startsWith('wss://')),
+    'the legacy direct QR advertises its LAN routes for auto network selection')
+  assert.deepEqual(directPayload.routes.public,
+    directPayload.endpoints.filter(endpoint => endpoint.startsWith('wss://')),
+    'only verified public WSS endpoints join the public family')
+  assert.equal(directPayload.routes.relay.nodeId, 'ecb2de50-7542-490b-af4f-aebfcb29c3c2',
+    'a registered relay stays available as the off-LAN fallback in direct mode')
+  assert.equal(directPayload.routes.relay.authMode, 'gateway')
 
   // Both clients receive the same ordered public and LAN candidates; the
   // mini-program also keeps its explicit route for older native App decoders.
@@ -560,6 +569,12 @@ function expectRejected(url, options = {}) {
     'the mini-program gets the same public and LAN fallback candidates')
   assert.equal(JSON.stringify({ publicUrl: autoPayload.publicUrl, endpoints: autoPayload.endpoints }).includes('203.0.113.10'), true,
     'the native App receives the public endpoint as a candidate')
+  assert.deepEqual(autoPayload.routes.public, ['wss://203.0.113.10/ws/mobile'],
+    'the route table classifies the verified public WSS endpoint')
+  assert.ok(autoPayload.routes.lan.includes('ws://192.168.1.20:3081/ws/mobile'),
+    'the route table keeps LAN candidates for same-network connections')
+  assert.equal(autoPayload.routes.relay.relay, 'wss://relay.example.com',
+    'the route table also exposes the registered relay to capable clients')
 
   const configuredPublicUrlText = fs.readFileSync(publicUrlFile, 'utf8')
   fs.writeFileSync(publicUrlFile, '# temporarily test relay fallback without a public WSS route\n')
@@ -574,6 +589,11 @@ function expectRejected(url, options = {}) {
   assert.equal(relayAutoPayload.miniProgramRoute.mode, 'relay', 'auto falls back to the registered relay for the mini-program')
   assert.equal(relayAutoPayload.miniProgramRoute.relay, 'wss://relay.example.com')
   assert.equal('pairingCode' in relayAutoPayload.miniProgramRoute, false, 'the one-time code is shared only at the envelope level')
+  assert.deepEqual(relayAutoPayload.routes.public, [],
+    'without a verified public WSS endpoint the route table has no public family')
+  assert.deepEqual(relayAutoPayload.routes.lan, ['ws://192.168.1.20:3081/ws/mobile'])
+  assert.equal(relayAutoPayload.routes.relay.nodeId, 'ecb2de50-7542-490b-af4f-aebfcb29c3c2',
+    'auto pairing still advertises the relay so the phone can connect off-LAN')
   fs.writeFileSync(publicUrlFile, configuredPublicUrlText)
 
   const unsafeAppEndpoint = await fetch(`${base}/mgw/pair`, {

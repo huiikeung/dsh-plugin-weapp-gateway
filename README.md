@@ -313,7 +313,7 @@ http://127.0.0.1:<本地端口>
 4. WebUI 的可信设备显示“在线”后即完成。
 
 二维码只能使用一次，并会在 5 分钟后过期；超时后在 WebUI 重新生成即可。
-“自动选择”会把可用公网 WSS 和局域网地址放入直连候选列表；公网 WSS 就绪时 DSH App 与小程序都能尝试这两类地址。没有公网入口时，App 使用局域网；小程序优先使用已注册的鲸尾中继，否则使用局域网。
+“自动选择”会生成带 `routes` 分类路由表的二维码，客户端按自身能力自动选路：DSH App 依次尝试上次连通地址、公网 WSS、局域网；小程序依次尝试上次连通地址、已注册的鲸尾中继（小程序的公网）、局域网——小程序不拨 Cloudflare/反代公网直连，因为这些域名不在小程序 socket 合法域名里。
 原有“鲸尾公网 · 小程序”专用中继配对选项也保留：需要强制使用鲸尾中继、且二维码只给小程序使用时选择它；想用同一张码配对 App 和小程序时选择自动模式。
 
 ## Windows / macOS 家用电脑远程连接
@@ -324,7 +324,7 @@ http://127.0.0.1:<本地端口>
 
 ### Cloudflare Quick Tunnel（一键临时接入）
 
-在「鲸尾移动网关 → 连接与配对」展开 Cloudflare 外网设置，选择「Quick Tunnel · 无需域名」并点击「一键开启」。面板连接后会取得随机的 `wss://<名称>.trycloudflare.com/ws/mobile`。生成“自动选择”二维码后，DSH App 和小程序都会获得公网 WSS 与局域网候选地址，并自动尝试可达线路。原有“鲸尾公网 · 小程序”专用中继选项仍可单独使用。关闭开关会停止隧道；DSH 再次启动时会恢复已开启的 Quick 模式并取得**新的随机地址**。
+在「鲸尾移动网关 → 连接与配对」展开 Cloudflare 外网设置，选择「Quick Tunnel · 无需域名」并点击「一键开启」。面板连接后会取得随机的 `wss://<名称>.trycloudflare.com/ws/mobile`。生成“自动选择”二维码后，DSH App 会自动尝试公网 WSS 与局域网候选地址；小程序则走鲸尾中继或局域网。原有“鲸尾公网 · 小程序”专用中继选项仍可单独使用。关闭开关会停止隧道；DSH 再次启动时会恢复已开启的 Quick 模式并取得**新的随机地址**。
 
 Quick Tunnel 无需 Cloudflare 账户、Token 或自己的公网域名，但地址在 DSH 重启或隧道重连后可能变化。若隧道地址变化，重新生成二维码供 DSH App 或小程序配对；**仅凭 PC 在线不能保证旧地址继续可用**。Cloudflare 将 Quick Tunnel 定位于测试和开发，当前有并发请求上限且不提供可用性保证。参见 [Cloudflare Quick Tunnel 文档](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/do-more-with-tunnels/trycloudflare/)。
 
@@ -339,7 +339,7 @@ Quick Tunnel 无需 Cloudflare 账户、Token 或自己的公网域名，但地�
 1. 打开控制台 → **Networking > Tunnels** → **Create a tunnel** → 选 `Cloudflared` → 填一个 Tunnel 名字（如 `dsh-nas`）。
 2. 控制台随后给出安装命令（`cloudflared service install <Token>` 的形式）。**Token 就是这条命令里 `eyJ…` 开头的那一段**——插件会用自己的 cloudflared 运行，你不需要在 NAS 上执行这条命令，只需复制 Token。
 3. 在 Tunnel 的 **Routes / Public Hostname** 里添加一条路由：子域名 + 域名（例如 `gw.example.com`，域名需托管在 Cloudflare），**Service URL 设为 `http://127.0.0.1:3082`**（与面板里显示的本机端口一致；自定义 `cloudflarePort` 时同步修改）。
-4. 回到面板填入公开域名和 Token，点「开启命名 Tunnel」。插件会将网关设为常驻模式，启动本机专用入口和 `cloudflared`。面板确认公网入口可达后，生成“自动选择”二维码；DSH App 和小程序都可使用公网 WSS，并保留局域网候选地址。
+4. 回到面板填入公开域名和 Token，点「开启命名 Tunnel」。插件会将网关设为常驻模式，启动本机专用入口和 `cloudflared`。面板确认公网入口可达后，生成“自动选择”二维码；DSH App 可使用公网 WSS 并保留局域网候选地址，小程序走鲸尾中继或局域网。
 5. 以后启动 `dsh web` 会自动恢复已开启的 Tunnel；在面板点击「关闭 Cloudflare Tunnel」会停止插件管理的 `cloudflared` 并关闭本机专用入口。若手动关闭网关，Tunnel 会暂停，重新开启网关后恢复。
 
 两种 Cloudflare 入口都只接受 `/ws/mobile` WebSocket，其他 HTTP 路径（包括 DSH WebUI 和 `/mgw` 管理接口）返回 404；设备凭证始终必需，即使本机 Debug 鉴权被关闭也一样。命名 Tunnel 的 Token 保存在 `<deviceFile>.cloudflare.json`（默认 `~/.dsh/mobile-gateway-devices.json.cloudflare.json`），权限为 `0600`，不会返回给浏览器。默认使用 DSH 私有的 `cloudflared-bin` 缓存，不读取系统或其他 App 的 `cloudflared`；每次启动 Tunnel 都校验缓存文件，只有缓存缺失或损坏时才下载固定版本并核对 Cloudflare 官方发布资产的 SHA-256。仅在显式配置 `cloudflaredPath` 时使用外部程序。使用自定义 `cloudflarePort` 时，命名 Tunnel 路由的 Service URL 端口也要相应修改。
