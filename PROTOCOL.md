@@ -164,6 +164,7 @@ func connectAuthenticated(publicURL: URL, token: String) -> URLSessionWebSocketT
 | type | 参数 | 说明 |
 |---|---|---|
 | `ping` | — | 心跳；回复 `pong` |
+| `device-forget` | `requestId` | 已鉴权客户端撤销当前 WebSocket 对应的自身设备记录；服务端不接受客户端指定设备 ID，确认后关闭该设备的连接 |
 | `subscribe` | `sessionId`, `assistantStream?` | 事件流过滤；`assistantStream: true` 启用独立实时流及原子基线（见 [rc.2 接入说明](docs/dsh-rc2-mobile-integration.md)），并重放该会话仍待处理的提问与审批（不订阅 = 接收所有会话） |
 | `unsubscribe` | — | 取消过滤 |
 
@@ -171,9 +172,14 @@ func connectAuthenticated(publicURL: URL, token: String) -> URLSessionWebSocketT
 {"type":"ping"}
 → {"kind":"pong","at":1786937352316}
 
+{"type":"device-forget","requestId":"forget-1"}
+→ {"kind":"device-forgotten","requestId":"forget-1"}
+
 {"type":"subscribe","sessionId":"session-abc"}
 → {"kind":"subscribed","sessionId":"session-abc"}
 ```
+
+设备忘记请求只适用于当前已鉴权的设备连接；缺少有效设备凭据时返回 `authentication-required`。移动端应收到 `device-forgotten` 后再清除本机对应的主机档案；若网络中断或旧版本网关不支持该请求，本机可继续移除档案，但无法远程删除离线网关上的记录。
 
 `subscribed` 之后，服务端会紧接着发送该 Session 尚未处理的
 `question-requested` / `approval-requested`，并标记 `replay: true`。客户端必须按

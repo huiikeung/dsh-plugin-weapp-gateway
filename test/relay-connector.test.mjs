@@ -1,10 +1,12 @@
 // The bundled relay connector supervisor: when to spawn it, when to stay out
 // of the way, and how it reports state to the panel.
 import assert from 'node:assert/strict'
+import { spawn as spawnChild } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { createRelayConnector, resolveStateDir } from '../lib/relay-connector.mjs'
+import { shouldRunRelayConnector } from '../lib/relay-state.mjs'
 
 let checks = 0
 function check(ok, what) {
@@ -19,6 +21,15 @@ check(fs.existsSync(new URL('../relay/agent-connector.js', import.meta.url)), 'b
 check(fs.existsSync(new URL('../relay/vendor/tweetnacl.js', import.meta.url)), 'bundled encryption dependency exists')
 
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'relay-conn-'))
+
+// Pairing a direct App client must not take a registered mini-program relay
+// offline; the selected pairing mode controls new QR payloads only.
+check(shouldRunRelayConnector({ pairingMode: 'direct', relay: { nodeId: 'registered' } }) === true,
+  'registered relay stays running while direct pairing is selected')
+check(shouldRunRelayConnector({ pairingMode: 'relay', relay: null }) === true,
+  'relay mode starts the connector before its first registration')
+check(shouldRunRelayConnector({ pairingMode: 'direct', relay: null }) === false,
+  'direct mode without a relay registration does not start an unused connector')
 
 // ---- resolveStateDir: reuse an existing identity, else the plugin's home ----
 const homeDir = path.join(temp, 'home')
@@ -65,7 +76,9 @@ function fakeSpawn() {
   })
   const snap = supervisor.start()
   check(spawned.length === 1, 'one child is spawned')
-  check(spawned[0].command === process.execPath && spawned[0].args[0].endsWith('relay/agent-connector.js'),
+  check(spawned[0].command === process.execPath
+    && path.basename(spawned[0].args[0]) === 'agent-connector.js'
+    && path.basename(path.dirname(spawned[0].args[0])) === 'relay',
     'the child runs the bundled connector with the current node')
   check(spawned[0].options.env.RELAY_URL === 'wss://relay.example.com'
     && spawned[0].options.env.GATEWAY_URL === 'ws://127.0.0.1:2298/ws/mobile'
@@ -102,15 +115,20 @@ for (const relay of ['', 'wss://relay.ahwe.top', 'wss://relay.ahwe.top/relay/'])
 {
   const stateDir = path.join(temp, 'locked')
   fs.mkdirSync(stateDir, { recursive: true })
-  // pid 1 is alive and is definitely not this process, so it stands in for an
-  // installed connector that holds the identity.
-  fs.writeFileSync(path.join(stateDir, 'connector.lock'), `${JSON.stringify({ pid: 1 })}\n`)
-  const { spawnProcess, spawned } = fakeSpawn()
-  const supervisor = createRelayConnector({ relay: 'wss://r.example.com', stateDir, spawnProcess })
-  const snap = supervisor.start()
-  check(spawned.length === 0 && snap.running === false, 'no child is spawned while another connector holds the lock')
-  check(snap.delegatedTo === 1, 'the supervisor reports delegation instead of a failure')
-  supervisor.dispose()
+  // Use a real live child rather than PID 1, which is not portable to Windows.
+  const holder = spawnChild(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' })
+  await new Promise((resolve, reject) => { holder.once('spawn', resolve); holder.once('error', reject) })
+  try {
+    fs.writeFileSync(path.join(stateDir, 'connector.lock'), `${JSON.stringify({ pid: holder.pid })}\n`)
+    const { spawnProcess, spawned } = fakeSpawn()
+    const supervisor = createRelayConnector({ relay: 'wss://r.example.com', stateDir, spawnProcess })
+    const snap = supervisor.start()
+    check(spawned.length === 0 && snap.running === false, 'no child is spawned while another connector holds the lock')
+    check(snap.delegatedTo === holder.pid, 'the supervisor reports delegation instead of a failure')
+    supervisor.dispose()
+  } finally {
+    holder.kill()
+  }
 }
 
 // 5) a stale lock (dead pid) is taken over

@@ -41,6 +41,7 @@ const create = () => createCloudflareTunnel({
   onUpgrade: (_req, socket, _head, transport) => {
     acceptedUpgrades += 1
     assert.equal(transport.lan, true)
+    assert.equal(transport.cloudflare, true)
     socket.end('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n')
   },
 })
@@ -59,7 +60,7 @@ assert.equal(children.length, 1)
 assert.deepEqual(children[0].args, ['tunnel', '--no-autoupdate', '--loglevel', 'info', '--protocol', 'http2', 'run'])
 assert.equal(children[0].options.env.TUNNEL_TOKEN, token)
 assert.equal(children[0].args.join(' ').includes(token), false)
-assert.equal(fs.statSync(file).mode & 0o777, 0o600)
+if (process.platform !== 'win32') assert.equal(fs.statSync(file).mode & 0o777, 0o600)
 assert.equal(JSON.stringify(tunnel.snapshot()).includes(token), false)
 
 const base = `http://127.0.0.1:${port}`

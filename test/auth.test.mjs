@@ -29,9 +29,13 @@ function waitForMessage(ws, kind) {
 function expectRejected(url, options = {}) {
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(url, options)
-    ws.once('open', () => reject(new Error('expected WebSocket rejection')))
-    ws.once('unexpected-response', (_request, response) => resolve(response.statusCode))
-    ws.once('error', () => {})
+    const timer = setTimeout(() => {
+      ws.terminate()
+      reject(new Error(`timed out waiting for WebSocket rejection from ${url}`))
+    }, 5000)
+    ws.once('open', () => { clearTimeout(timer); reject(new Error('expected WebSocket rejection')) })
+    ws.once('unexpected-response', (_request, response) => { clearTimeout(timer); resolve(response.statusCode) })
+    ws.once('error', (error) => { clearTimeout(timer); reject(error) })
   })
 }
 
@@ -71,7 +75,7 @@ function expectRejected(url, options = {}) {
   const stored = fs.readFileSync(registryFile, 'utf8')
   assert.equal(stored.includes(pairing.code), false)
   assert.equal(stored.includes(claimed.token), false)
-  assert.equal(fs.statSync(registryFile).mode & 0o777, 0o600)
+  if (process.platform !== 'win32') assert.equal(fs.statSync(registryFile).mode & 0o777, 0o600)
   registry.connected(claimed.device.id)
   assert.equal(registry.list()[0].online, true)
   registry.disconnected(claimed.device.id)
@@ -231,6 +235,11 @@ function expectRejected(url, options = {}) {
   const unauthenticatedSpeech = waitForMessage(debugSocket, 'error')
   debugSocket.send(JSON.stringify({ type: 'speech-catalog', requestId: 'unauthenticated-speech' }))
   assert.equal((await unauthenticatedSpeech).code, 'authentication-required')
+  const unauthenticatedForget = waitForMessage(debugSocket, 'error')
+  debugSocket.send(JSON.stringify({ type: 'device-forget', requestId: 'unauthenticated-forget' }))
+  const forgetDenied = await unauthenticatedForget
+  assert.equal(forgetDenied.code, 'authentication-required')
+  assert.equal(forgetDenied.requestId, 'unauthenticated-forget')
   for (const type of ['workspace-changes-summary', 'workspace-changes-diff']) {
     const response = waitForMessage(debugSocket, 'error')
     debugSocket.send(JSON.stringify({ type, requestId: type, sessionId: 's1', seq: 12, index: 0 }))
@@ -281,6 +290,12 @@ function expectRejected(url, options = {}) {
     pairBody.payload,
   )
   assert.equal('token' in pairBody, false)
+
+  assert.equal(await expectRejected(wsUrl, { headers: { 'X-Forwarded-Proto': 'https' } }), 401,
+    'public TLS ingress accepts native App clients and applies device authentication')
+  assert.equal(await expectRejected(wsUrl, { headers: {
+    'X-Forwarded-Proto': 'https', 'X-DSH-Client-Type': 'wechat-miniprogram',
+  } }), 401, 'mini-program marker passes the public-route gate and reaches device authentication')
 
   assert.equal(
     await expectRejected(wsUrl, ['dsh-mobile-v1', `dsh-pair.${pairBody.payload.pairingCode}`]),
@@ -427,6 +442,30 @@ function expectRejected(url, options = {}) {
   assert.equal(await expectRejected(wsUrl, { headers: { Authorization: `Bearer ${pairedFrame.token}` } }), 401)
   assert.equal(await expectRejected(wsUrl, { headers: { Authorization: `Bearer ${rePairedFrame.token}` } }), 401)
 
+  const selfPairResponse = await fetch(`${base}/mgw/pair`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Origin: base },
+    body: JSON.stringify({ name: 'Self-removing phone', publicUrl: wsUrl }),
+  })
+  const selfPair = await selfPairResponse.json()
+  assert.equal(selfPairResponse.status, 201)
+  const selfDeviceId = '8f22f2b1-b4c0-42bd-bd91-b145f8b375b5'
+  const selfSocket = new WebSocket(wsUrl, ['dsh-mobile-v1', `dsh-pair.${selfPair.payload.pairingCode}`], {
+    headers: { 'X-DSH-Device-ID': selfDeviceId },
+  })
+  const selfPairedPromise = waitForMessage(selfSocket, 'paired')
+  await once(selfSocket, 'open')
+  const selfPaired = await selfPairedPromise
+  const forgottenPromise = waitForMessage(selfSocket, 'device-forgotten')
+  const selfClosedPromise = once(selfSocket, 'close')
+  selfSocket.send(JSON.stringify({ type: 'device-forget', requestId: 'forget-self-1' }))
+  assert.equal((await forgottenPromise).requestId, 'forget-self-1')
+  await selfClosedPromise
+  const afterSelfForget = await (await fetch(`${base}/mgw/devices`)).json()
+  assert.equal(afterSelfForget.devices.some((device) => device.id === selfPaired.device.id), false,
+    'self-forget removes the authenticated device from the registry')
+  assert.equal(await expectRejected(wsUrl, { headers: { Authorization: `Bearer ${selfPaired.token}` } }), 401)
+
   // ---- relay mode: the payload must not adopt the caller's address --------
   // The fnOS runbook tells operators to put a LAN address in the WebSocket
   // address field. Leaking that into the relay payload sends the mini-program
@@ -456,7 +495,7 @@ function expectRejected(url, options = {}) {
   const relayPair = await fetch(`${base}/mgw/pair`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Origin: base },
-    body: JSON.stringify({ name: 'Relay Probe', publicUrl: 'ws://192.168.3.110:3081/ws/mobile' }),
+    body: JSON.stringify({ name: 'Relay Probe', route: 'relay', publicUrl: 'ws://192.168.3.110:3081/ws/mobile' }),
   })
   assert.equal(relayPair.status, 201)
   const relayPayload = (await relayPair.json()).payload
@@ -467,6 +506,19 @@ function expectRejected(url, options = {}) {
   assert.equal(relayPayload.gatewayUrl, 'wss://203.0.113.10/ws/mobile')
   assert.equal('endpoints' in relayPayload, false)
   assert.equal(relayPayload.pairingCode.length, 43)
+
+  const autoWhileLegacyRelay = await fetch(`${base}/mgw/pair`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Origin: base },
+    body: JSON.stringify({
+      route: 'auto',
+      publicUrl: 'wss://203.0.113.10/ws/mobile',
+      appUrl: 'ws://192.168.1.20:3081/ws/mobile',
+    }),
+  })
+  assert.equal(autoWhileLegacyRelay.status, 201)
+  assert.equal((await autoWhileLegacyRelay.json()).payload.version, 2,
+    'auto client-aware pairing works even if an older installation persisted relay mode')
 
   const modeDirect = await fetch(`${base}/mgw/mode`, {
     method: 'POST',
@@ -484,6 +536,59 @@ function expectRejected(url, options = {}) {
   assert.equal(directPayload.version, 2)
   assert.equal(directPayload.publicUrl, wsUrl)
   assert.equal('mode' in directPayload, false)
+
+  // Both clients receive the same ordered public and LAN candidates; the
+  // mini-program also keeps its explicit route for older native App decoders.
+  const autoPair = await fetch(`${base}/mgw/pair`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Origin: base },
+    body: JSON.stringify({
+      route: 'auto',
+      publicUrl: 'wss://203.0.113.10/ws/mobile',
+      lanUrl: 'ws://192.168.1.20:3081/ws/mobile',
+    }),
+  })
+  assert.equal(autoPair.status, 201)
+  const autoPayload = (await autoPair.json()).payload
+  assert.equal(autoPayload.version, 2, 'existing native apps keep decoding the QR as v2')
+  assert.equal(autoPayload.publicUrl, 'wss://203.0.113.10/ws/mobile')
+  assert.equal(autoPayload.endpoints[0], 'wss://203.0.113.10/ws/mobile')
+  assert.ok(autoPayload.endpoints.includes('ws://192.168.1.20:3081/ws/mobile'))
+  assert.equal(autoPayload.miniProgramRoute.mode, 'direct')
+  assert.equal(autoPayload.miniProgramRoute.publicUrl, 'wss://203.0.113.10/ws/mobile')
+  assert.deepEqual(autoPayload.miniProgramRoute.endpoints, autoPayload.endpoints,
+    'the mini-program gets the same public and LAN fallback candidates')
+  assert.equal(JSON.stringify({ publicUrl: autoPayload.publicUrl, endpoints: autoPayload.endpoints }).includes('203.0.113.10'), true,
+    'the native App receives the public endpoint as a candidate')
+
+  const configuredPublicUrlText = fs.readFileSync(publicUrlFile, 'utf8')
+  fs.writeFileSync(publicUrlFile, '# temporarily test relay fallback without a public WSS route\n')
+  const relayAutoPair = await fetch(`${base}/mgw/pair`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Origin: base },
+    body: JSON.stringify({ route: 'auto', publicUrl: 'ws://192.168.1.20:3081/ws/mobile', appUrl: 'ws://192.168.1.20:3081/ws/mobile' }),
+  })
+  assert.equal(relayAutoPair.status, 201)
+  const relayAutoPayload = (await relayAutoPair.json()).payload
+  assert.equal(relayAutoPayload.publicUrl, 'ws://192.168.1.20:3081/ws/mobile')
+  assert.equal(relayAutoPayload.miniProgramRoute.mode, 'relay', 'auto falls back to the registered relay for the mini-program')
+  assert.equal(relayAutoPayload.miniProgramRoute.relay, 'wss://relay.example.com')
+  assert.equal('pairingCode' in relayAutoPayload.miniProgramRoute, false, 'the one-time code is shared only at the envelope level')
+  fs.writeFileSync(publicUrlFile, configuredPublicUrlText)
+
+  const unsafeAppEndpoint = await fetch(`${base}/mgw/pair`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Origin: base },
+    body: JSON.stringify({ route: 'auto', publicUrl: 'wss://203.0.113.10/ws/mobile', lanUrl: 'wss://203.0.113.10/ws/mobile' }),
+  })
+  assert.equal(unsafeAppEndpoint.status, 409, 'the LAN candidate must not be populated with a public endpoint')
+
+  const unreadyCloudflare = await fetch(`${base}/mgw/pair`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Origin: base },
+    body: JSON.stringify({ route: 'cloudflare', publicUrl: 'wss://203.0.113.10/ws/mobile', lanUrl: 'ws://192.168.1.20:3081/ws/mobile' }),
+  })
+  assert.equal(unreadyCloudflare.status, 409, 'explicit Cloudflare routing requires a verified reachable tunnel')
 
   // ---- relabel a paired device (the relay connector renames its entry once
   //      the phone reports its own model) ----

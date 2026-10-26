@@ -119,8 +119,8 @@ check(src.includes('React.useEffect(() => { setOpen(true) }, [])'),
   'the settings section opens the dialog on mount (no intermediate card)')
 check(src.includes('apiPath') && src.includes('document.baseURI'),
   'management RPC resolves against the document base (fnOS gateway prefix safe)')
-check(src.includes("'中继 · 小程序'") && src.includes('/mgw/mode'),
-  'relay is a pairing-route option that switches the server-side mode')
+check(src.includes("route: pairingRoute") && src.includes('lanUrl: lanPairingUrl(status)'),
+  'pairing request carries the selected route and local-LAN fallback endpoint')
 
 // ------------------------------------------------------------- render A: initial
 console.log('\n=== render A: initial (loading) state ===')
@@ -133,12 +133,11 @@ for (const [needle, what] of [
   ['aria-label="关闭"', 'close button rendered (upstream glyph)'],
   ['网关运行模式', 'gateway mode row'],
   ['设备鉴权', 'auth row'],
-  ['WebSocket 地址', 'ws url field'],
   ['可信设备', 'trusted devices group'],
-  ['WebSocket 地址', 'ws address field labelled in direct mode'],
   ['aria-label="工具"', 'tools gear button rendered (menu opens on click)'],
 ]) check(htmlA.includes(needle), what)
 check(!htmlA.includes('正在检查系统组件…'), 'public access stays hidden while status is loading')
+check(!htmlA.includes('DSH App / 小程序连接地址'), 'custom address field is hidden until the custom route is selected')
 
 // ---------------------------------------------------------- render B: populated
 console.log('\n=== render B: populated state ===')
@@ -216,20 +215,14 @@ for (const [needle, what] of [
   ['已刷新 · 10:00:00', 'refresh notice'],
   ['v0.8.5', 'version footer'],
   ['aria-label="关闭"', 'close button'],
-  ['中继 · 小程序', 'relay is an option of the pairing-route dropdown'],
-  ['中继 · 小程序', 'relay is an option of the pairing-route dropdown'],
-  ['中继', 'relay option offered'],
+  ['自动选择', 'automatic client-aware route offered'],
+  ['鲸尾公网 · 小程序', 'the standalone mini-program relay route remains available'],
   ['aria-checked="true"', 'auth switch is on'],
-  ['wss://relay.ahwe.top', 'registered relay shown'],
-  ['nodeId ecb2de50…', 'relay nodeId shown (abbreviated)'],
-  ['已注册的中继', 'relay registration hint'],
-  ['小程序只能连接已配置的域名、且基本限于 443 端口', 'relay mode explains why a public direct URL is unreachable'],
-  ['中继链路已验证可用', 'relay warning states the backend is proven'],
-  ['已注册的中继：wss://relay.ahwe.top', 'relay registration shown in the address group'],
-  ['已注册的中继：wss://relay.ahwe.top', 'relay address shown under the route selector'],
-  ['网关地址（仅透传给小程序）', 'relay mode demotes the ws field to informational'],
-  ['中继模式下小程序不直连它', 'explains the demotion'],
-  ['公网接入（中继模式下只影响上面透传的网关地址）', 'public-access label explains its reduced scope'],
+  ['设备 ID ecb2de50…', 'registered relay identity shown (abbreviated)'],
+  ['鲸尾公网服务 · 已注册', 'relay registration hint'],
+  ['自动选择会优先使用已就绪的 Cloudflare 或公网服务器入口', 'auto route prefers a ready public endpoint before the registered relay'],
+  ['也可单独选择“鲸尾公网 · 小程序”', 'the separate mini-program relay pairing option remains available'],
+  ['公网接入', 'public access label is independent of pairing mode'],
   ['若安装或更新后连接异常，请重启应用', 'restart notice shown for the current gateway instance'],
   ['展开其他已配对设备（1）', 'offline devices collapse behind a toggle'],
   ['aria-label="工具"', 'tools gear button rendered'],
@@ -260,17 +253,32 @@ const htmlC = renderToStaticMarkup(React.createElement(directExported.DevicePane
 for (const [needle, what] of [
   ['配对连接方式', 'route selector present in direct mode'],
   ['aria-checked="true"', 'a mode is selected'],
-  ['WebSocket 地址', 'direct mode labels the ws field plainly'],
   ['公网接入', 'direct-mode public-access label is plain (no relay caveat)'],
   ['ws://192.168.3.110:3081/ws/mobile', 'gateway address shown'],
   ['配对连接方式', 'route selector rendered in direct mode'],
-  ['自动选择 · 优先外网', 'auto route option offered'],
+  ['DSH App 和小程序都可通过公网或局域网连接', 'both clients can use public and LAN routes'],
+  ['自动选择', 'auto route option offered'],
 ]) check(htmlC.includes(needle), what)
+check(htmlC.includes('鲸尾公网 · 尚未注册'), 'the standalone relay route stays visible but unavailable until registration')
+check(!htmlC.includes('DSH App / 小程序连接地址'), 'custom address field stays hidden in automatic mode')
 check(!htmlC.includes('中继模式：二维码指向上面的中继地址'), 'direct mode does not show the relay route note')
 // negative checks: the relay details must not leak into direct mode
 for (const needle of ['wss://relay.ahwe.top', 'nodeId ecb2de50', 'agentPubKey nU2yVdMWY2']) {
   check(!htmlC.includes(needle), `direct mode hides ${needle}`)
 }
+
+// Registered relay service stays visible even while generating a direct App QR.
+const directRelaySeeds = JSON.parse(JSON.stringify(directSeeds))
+directRelaySeeds[3].relay = seeds[3].relay
+directRelaySeeds[3].relayConnector = { running: true, delegatedTo: null, lastError: null }
+directRelaySeeds[27] = () => new Set()
+const directRelayExported = loadBundle(seededReact(directRelaySeeds)).factory((id) => {
+  if (id === 'react') return seededReact(directRelaySeeds)
+  throw new Error(`unexpected require: ${id}`)
+})
+const htmlCRelay = renderToStaticMarkup(React.createElement(directRelayExported.DevicePanel, { close: () => {} }))
+check(htmlCRelay.includes('鲸尾公网服务 · 已注册') && htmlCRelay.includes('中继连接保持运行；切换配对方式不会断开已配对设备。'),
+  'registered relay remains visible and running while direct pairing is selected')
 
 // ------------------------------------------------ render D: Cloudflare tunnel (PC)
 // The Windows/macOS shape: no Nginx helper, but a live managed Cloudflare
@@ -306,6 +314,8 @@ for (const [needle, what] of [
   ['Cloudflare 外网', 'cloudflare pairing route label in the trigger while enabled'],
   ['TLS 校验通过', 'endpoint health message shown when reachable'],
 ]) check(htmlD.includes(needle), what)
+check(htmlD.includes('<details') && htmlD.includes('<summary'), 'Cloudflare configuration is collapsed below pairing controls')
+check(!htmlD.includes('自动模式会优先为小程序使用已就绪的公网入口'), 'Cloudflare-specific route does not show the automatic-mode hint')
 check(!htmlD.includes('Nginx'), 'linux public-access block hidden on PC')
 check(!htmlD.includes('Linux 服务器不自动下载'), 'PC shows the managed-download note, not the Linux one')
 
@@ -336,9 +346,24 @@ for (const [needle, what] of [
   ['pkg.cloudflare.com', 'names the official package source'],
   ['一键开启 Quick Tunnel', 'quick tunnel can be started from Linux'],
   ['未开启', 'tunnel idle state shown'],
-  ['>cloudflare<', 'route trigger reflects the selected route'],
+  ['Cloudflare 外网 · 尚未就绪', 'unready Cloudflare route remains selectable'],
+  ['先开启 Cloudflare Tunnel', 'pairing stays disabled until the selected tunnel is enabled'],
 ]) check(htmlE.includes(needle), what)
 check(htmlE.includes('Nginx'), 'linux public-access block stays visible on Linux')
+
+// Automatic selection should not duplicate Cloudflare setup controls; it can
+// still select a ready public route at pairing time without exposing settings.
+const cfAutoSeeds = JSON.parse(JSON.stringify(cfLinuxSeeds))
+cfAutoSeeds[6] = 'auto'
+cfAutoSeeds[27] = () => new Set()
+const cfAutoExported = loadBundle(seededReact(cfAutoSeeds)).factory((id) => {
+  if (id === 'react') return seededReact(cfAutoSeeds)
+  throw new Error(`unexpected require: ${id}`)
+})
+const htmlAuto = renderToStaticMarkup(React.createElement(cfAutoExported.DevicePanel, { close: () => {} }))
+check(htmlAuto.includes('自动模式会优先为小程序使用已就绪的公网入口'), 'automatic route explains its public-endpoint priority')
+check(!htmlAuto.includes('mgw-cloudflare-block'), 'Cloudflare configuration is hidden in automatic mode')
+check(htmlAuto.includes('Cloudflare 外网 · 尚未就绪'), 'automatic mode keeps the Cloudflare option available for selection')
 
 // ------------------------------------------- render F: named tunnel mode (Linux)
 // The named-tunnel form state: how to obtain the domain and Token, with the
@@ -392,9 +417,8 @@ check(src.includes('function GatewaySelect') && src.includes("addEventListener('
   && src.includes("if (event.key === 'Escape')"),
   'GatewaySelect closes on Escape and on outside pointerdown')
 check(src.includes('function GatewaySelect'), 'the panel uses the themed GatewaySelect')
-check(src.includes("JSON.stringify({ publicUrl: endpoint })") && !src.includes('deviceName'), 'pairing body carries only publicUrl; the device-name field is gone')
-check(src.includes('apiPath') && src.includes("value: 'relay'") && src.includes('/mgw/mode'),
-  'fork deltas present: apiPath, relay route, mode switch')
+check(src.includes('route: pairingRoute') && src.includes('lanUrl: lanPairingUrl(status)') && src.includes("value: 'relay'") && !src.includes('deviceName'),
+  'pairing supports both the automatic dual-client route and a standalone relay route without exposing the device name')
 // 扫码成功后二维码弹窗要自动关闭：轮询发现自己的配对码离开待用列表即 setQr(null)。
 check(src.includes('pairingIdRef.current = data.pairing?.id || null')
   && src.includes('!statusData.pendingPairings.includes(pairingIdRef.current)'),
@@ -407,11 +431,12 @@ check(src.includes("document.execCommand('copy')")
   && src.includes('const [copyNotice, setCopyNotice] = React.useState(null)')
   && src.includes("copyNotice ? React.createElement('div', { role: 'alert'"),
   'copy pairing token falls back to execCommand and reports inside the QR dialog')
-// 首屏不能显示 cloudflare 地址：refresh() 必须先采纳服务端的 pairingMode，
-// 否则本地 ref 停留在 auto，中继模式下地址栏仍是 tunnel 地址。
-check(src.includes("statusData.pairingMode === 'relay' && pairingRouteRef.current !== 'custom'")
+// Restore the saved standalone relay route until the operator explicitly
+// chooses another option; subsequent polling must not override that choice.
+check(src.includes("const savedRoute = statusData.pairingMode === 'relay' ? 'relay' : 'auto'")
+  && src.includes('if (!pairingRouteSelectedRef.current)')
   && src.includes("const preferredUrl = pairingUrlFor(pairingRouteRef.current, statusData)"),
-  'refresh adopts the server pairing mode before deriving the address')
+  'refresh restores the saved pairing route without overriding a new selection')
 // 上游基底的 module id 是 dsh-plugin-mobile-gateway；加载器按包名
 // dsh-plugin-weapp-gateway 查找，id 不一致会 "loaded without registering"。
 check(/id: 'dsh-plugin-weapp-gateway'/.test(src) && !src.includes("id: 'dsh-plugin-mobile-gateway'"),
