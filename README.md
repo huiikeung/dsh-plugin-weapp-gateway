@@ -6,6 +6,15 @@
 
 `dsh-plugin-weapp-gateway` · DeepSeek Harness 移动客户端连接插件
 
+### v0.8.31 · 测试套件可在 Windows 上跑通
+
+- 新增 `spawnProcess` 插件选项：把 `createCloudflareTunnel` 本来就支持的注入缝从插件选项转发下去，默认仍是真实 `spawn`，不影响生产行为。
+- 修复 `setup-ip` 测试在 Windows 上必失败：测试原先直接调 `python3`，而 Windows 上 `python3`/`python` 往往只是 App Execution Alias 占位桩——能以 0 退出却什么都不做（"Python was not found; ..."）。改为依次探测 `PYTHON`/`python3`/`python`，用版本号开头判断是不是真解释器；找不到可用解释器时明确打印跳过原因，而不是抛断言。
+- 修复 `lan` 测试在 Windows 上必失败：假 cloudflared 是带 shebang 的脚本，Windows 上 spawn 直接 ENOENT；改成 `.cmd` 更糟——Node 24 起（CVE-2024-27980 修复）spawn `.cmd` 会抛 EINVAL。现在假二进制写成普通 node 脚本，经 `spawnProcess` 映射成 `node <脚本>`，POSIX 行为不变。
+- 修复 `lan` 与 `multi-gateway` 测试在 Windows 上断言 POSIX 文件权限（`0o600`）失败：Windows 不支持权限位，chmod 后 stat 仍是 `0o666`。与仓库里 `auth.test.mjs`、`cloudflare-tunnel.test.mjs` 已有的做法对齐，按 `process.platform !== 'win32'` 守卫这条断言。
+- 修复 `cloudflare-tunnel` 测试偶发挂住：两个探测用的 WebSocket 从来没有被关闭，`response` 也没有 destroy，泄漏的 socket 会让进程在打印 `CLOUDFLARE TUNNEL TESTS PASSED` 之后退不掉。表现为整套测试跑到第 26 个时约三分之一概率超时（单独跑反而正常，因此长期被掩盖）。现在探测结束就 `response.destroy()` + `ws.terminate()`。
+- 以上修完，31 个测试文件在 Windows 上全部通过（此前固定 3 个失败，外加 1 个偶发挂住）。
+
 ### v0.8.27 · 移动端 App 新协议适配
 
 - 新增 `turn-outline-v1`：会话快照与控制流同步完整轮次大纲，支持客户端按 seq 懒分页定位历史。

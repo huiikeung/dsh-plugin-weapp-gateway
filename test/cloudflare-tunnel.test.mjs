@@ -68,13 +68,23 @@ assert.equal((await fetch(`${base}/mgw/status`)).status, 404)
 assert.equal((await fetch(`${base}/`)).status, 404)
 const wrong = await new Promise((resolve) => {
   const ws = new WebSocket(`ws://127.0.0.1:${port}/wrong`)
-  ws.once('unexpected-response', (_request, response) => resolve(response.statusCode))
+  ws.once('unexpected-response', (_request, response) => {
+    const status = response.statusCode
+    response.destroy()
+    ws.terminate()
+    resolve(status)
+  })
   ws.on('error', () => {})
 })
 assert.equal(wrong, 404)
 const denied = await new Promise((resolve) => {
   const ws = new WebSocket(`ws://127.0.0.1:${port}/ws/mobile`)
-  ws.once('unexpected-response', (_request, response) => resolve(response.statusCode))
+  ws.once('unexpected-response', (_request, response) => {
+    const status = response.statusCode
+    response.destroy()
+    ws.terminate()
+    resolve(status)
+  })
   ws.on('error', () => {})
 })
 assert.equal(denied, 401)

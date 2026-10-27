@@ -62,8 +62,23 @@ assert.match(helperService(1000), /NoNewPrivileges=true/)
 assert.doesNotMatch(helperService(1000), /\/bin\/sh/)
 
 const helperPath = fileURLToPath(new URL('../helper/dsh_mobile_gateway_helper.py', import.meta.url))
-const helperSyntax = spawnSync(process.env.PYTHON || 'python3', ['-c', 'import pathlib,sys; compile(pathlib.Path(sys.argv[1]).read_text(), sys.argv[1], "exec")', helperPath], { encoding: 'utf8' })
-assert.equal(helperSyntax.status, 0, helperSyntax.stderr)
+// 真解释器探测：Windows 上 python3/python 可能只是 App Execution Alias 占位桩，
+// 能以 0 退出却什么都不做（"Python was not found; ..."）。用版本号开头判断真假，
+// 找不到可用解释器就跳过这项语法检查——它是 lint，不是被测逻辑本身。
+function resolvePython() {
+  for (const candidate of [process.env.PYTHON, 'python3', 'python'].filter(Boolean)) {
+    const probe = spawnSync(candidate, ['--version'], { encoding: 'utf8' })
+    if (!probe.error && probe.status === 0 && /^Python \d+\.\d+/m.test((probe.stdout || '') + (probe.stderr || ''))) return candidate
+  }
+  return null
+}
+const pythonInterpreter = resolvePython()
+if (pythonInterpreter) {
+  const helperSyntax = spawnSync(pythonInterpreter, ['-c', 'import pathlib,sys; compile(pathlib.Path(sys.argv[1]).read_text(), sys.argv[1], "exec")', helperPath], { encoding: 'utf8' })
+  assert.equal(helperSyntax.status, 0, helperSyntax.stderr)
+} else {
+  console.log('helper syntax check skipped: no working Python interpreter on PATH (set PYTHON to enable)')
+}
 
 const binPath = fileURLToPath(new URL('../bin/setup-ip.mjs', import.meta.url))
 const directInvocation = spawnSync(process.execPath, [binPath, '--help'], { encoding: 'utf8' })

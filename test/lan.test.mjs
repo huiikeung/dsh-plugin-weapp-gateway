@@ -8,6 +8,7 @@ const net = require('node:net')
 const os = require('node:os')
 const path = require('node:path')
 const { once } = require('node:events')
+const { spawn } = require('node:child_process')
 const WebSocket = require('ws')
 const plugin = (await import('../lib/index.mjs')).default
 const { createTestConnection } = await import('./helpers/peer.mjs')
@@ -53,7 +54,13 @@ async function waitForLanStatus(base) {
   portProbe.close()
   await once(portProbe, 'close')
   const fakeCloudflared = path.join(temp, 'fake-cloudflared')
-  fs.writeFileSync(fakeCloudflared, '#!/usr/bin/env node\nif (process.argv.includes("--url")) process.stderr.write("https://sample-quick.trycloudflare.com\\n")\nprocess.stderr.write("Registered tunnel connection\\n")\nsetInterval(() => {}, 1000)\n', { mode: 0o700 })
+  const fakeCloudflaredScript = path.join(temp, 'fake-cloudflared.js')
+  fs.writeFileSync(fakeCloudflaredScript, 'if (process.argv.includes("--url")) process.stderr.write("https://sample-quick.trycloudflare.com\\n")\nprocess.stderr.write("Registered tunnel connection\\n")\nsetInterval(() => {}, 1000)\n')
+  // Windows 上假二进制没法直接 exec：shebang 脚本报 ENOENT，.cmd 在 Node 24 起报 EINVAL。
+  // 经 spawnProcess 注入一层，把假二进制映射成 node <脚本>；POSIX 行为不变。
+  const spawnProcess = (binary, args, options) => binary === fakeCloudflared
+    ? spawn(process.execPath, [fakeCloudflaredScript, ...args], options)
+    : spawn(binary, args, options)
   let managementRoute
   let upgradeRoute
   let disposePlugin
@@ -114,6 +121,7 @@ async function waitForLanStatus(base) {
     lanPort: 0,
     cloudflarePort,
     cloudflaredPath: fakeCloudflared,
+    spawnProcess,
   })
   server.listen(0, '127.0.0.1')
   await once(server, 'listening')
@@ -236,7 +244,8 @@ async function waitForLanStatus(base) {
     assert.equal(live.endpoints.includes('wss://gateway.example.com/ws/mobile'), true)
     assert.equal(live.cloudflare.enabled, true)
     assert.equal(JSON.stringify(live).includes('eyJ.test-token'), false)
-    assert.equal(fs.statSync(`${path.join(temp, 'devices.json')}.cloudflare.json`).mode & 0o777, 0o600)
+    // Windows 没有 POSIX 权限位（chmod 0o600 后仍是 0o666），只在 POSIX 上断言。
+    if (process.platform !== 'win32') assert.equal(fs.statSync(`${path.join(temp, 'devices.json')}.cloudflare.json`).mode & 0o777, 0o600)
     const switched = await fetch(`${base}/mgw/cloudflare`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Origin: base },

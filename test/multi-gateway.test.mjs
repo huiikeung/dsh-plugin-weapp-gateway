@@ -113,7 +113,8 @@ try {
   const loaded = createGatewayState(statePath)
   assert.equal(loaded.gatewayId, state.gatewayId)
   assert.equal(loaded.mode, 'persistent')
-  assert.equal(fs.statSync(statePath).mode & 0o777, 0o600)
+  // Windows 没有 POSIX 权限位（chmod 0o600 后仍是 0o666），只在 POSIX 上断言。
+  if (process.platform !== 'win32') assert.equal(fs.statSync(statePath).mode & 0o777, 0o600)
   for (const invalid of ['{', JSON.stringify({ version: 1, gatewayId: state.gatewayId, mode: 'invalid' })]) {
     fs.writeFileSync(statePath, invalid)
     assert.throws(() => createGatewayState(statePath), /failed to load gateway state/)
