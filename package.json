@@ -1,6 +1,6 @@
 {
   "name": "dsh-plugin-weapp-gateway",
-  "version": "0.8.31",
+  "version": "0.8.32",
   "description": "鲸尾移动网关：DeepSeek Harness 移动客户端连接与会话同步，支持安全配对、远程访问、上下文、编队、额度和语音输入",
   "main": "lib/index.mjs",
   "files": [

@@ -6,6 +6,13 @@
 
 `dsh-plugin-weapp-gateway` · DeepSeek Harness 移动客户端连接插件
 
+### v0.8.32 · 修复 Windows 上网关完全没有日志
+
+- 修复默认日志路径写死成 POSIX 的 `/tmp/mobile-gateway.log`：Windows 上它会解析到「当前盘:\tmp」（一般不存在），`appendFileSync` 抛 ENOENT 又被 `log()` 的 catch 静默吞掉，运营者于是**完全看不到任何日志**——排查「手机为什么掉线」时没有任何线索。现在按平台取 `os.tmpdir()`，Windows 上落到 `%TEMP%\mobile-gateway.log`；Linux/macOS 行为不变。
+- 日志内容本身不变：连接/断开、配对、鉴权拒绝、设备撤销照旧记录。`logFile` 选项仍可覆盖，测试与并行安装仍写各自的文件。
+
+### v0.8.31 · 测试套件可在 Windows 上跑通
+
 ### v0.8.31 · 测试套件可在 Windows 上跑通
 
 - 新增 `spawnProcess` 插件选项：把 `createCloudflareTunnel` 本来就支持的注入缝从插件选项转发下去，默认仍是真实 `spawn`，不影响生产行为。
