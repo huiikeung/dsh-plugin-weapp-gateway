@@ -183,6 +183,25 @@ async function waitForLanStatus(base) {
   assert.equal(paired.gatewayId, status.gatewayId)
   assert.equal(hello.gatewayId, status.gatewayId)
 
+  // The LAN listener tags its sockets: the trusted-device row badges 局域网.
+  const deviceById = async (id) => {
+    const body = await (await fetch(`${base}/mgw/devices`)).json()
+    return body.devices.find((row) => row.id === id)
+  }
+  // The server's close handler can trail the client's close event, so route
+  // teardown is awaited by polling instead of a single snapshot.
+  const waitForRoutes = async (id, expected) => {
+    for (let attempt = 0; attempt < 50; attempt += 1) {
+      const routes = (await deviceById(id)).routes
+      if (JSON.stringify(routes) === JSON.stringify(expected)) return routes
+      await new Promise((resolve) => setTimeout(resolve, 20))
+    }
+    throw new Error(`device ${id} routes did not become ${JSON.stringify(expected)}`)
+  }
+  const lanDevice = await deviceById(paired.device.id)
+  assert.equal(lanDevice.online, true)
+  assert.deepEqual(lanDevice.routes, ['lan'])
+
   // A token paired through LAN identifies the same gateway on the host listener.
   const main = new WebSocket(`ws://127.0.0.1:${webServer.port}/ws/mobile`, {
     headers: { Authorization: `Bearer ${paired.token}`, 'X-DSH-Device-ID': deviceId },
@@ -190,8 +209,14 @@ async function waitForLanStatus(base) {
   const mainHelloPromise = waitForMessage(main, 'hello')
   await once(main, 'open')
   assert.equal((await mainHelloPromise).gatewayId, hello.gatewayId)
+  // The second channel arrives on the main listener, so the row now badges
+  // 局域网 and 公网 at once; closing it leaves the LAN badge alone.
+  const dualRouteDevice = await deviceById(paired.device.id)
+  assert.equal(dualRouteDevice.connections, 2)
+  assert.deepEqual(dualRouteDevice.routes, ['lan', 'public'])
   main.close()
   await once(main, 'close')
+  assert.deepEqual(await waitForRoutes(paired.device.id, ['lan']), ['lan'])
 
   if (process.platform === 'darwin' || process.platform === 'win32') {
     const configured = await fetch(`${base}/mgw/cloudflare`, {
@@ -231,8 +256,13 @@ async function waitForLanStatus(base) {
     const tunnelHello = waitForMessage(tunnelClient, 'hello')
     await once(tunnelClient, 'open')
     assert.equal((await tunnelHello).authenticated, true)
+    // The tunnel origin listener tags its sockets: the row badges
+    // Cloudflare 外网 alongside the still-open LAN connection.
+    const tunnelDevice = await deviceById(paired.device.id)
+    assert.deepEqual(tunnelDevice.routes, ['lan', 'cloudflare'])
     tunnelClient.close()
     await once(tunnelClient, 'close')
+    assert.deepEqual(await waitForRoutes(paired.device.id, ['lan']), ['lan'])
     let connected = false
     for (let attempt = 0; attempt < 50; attempt += 1) {
       const current = await (await fetch(`${base}/mgw/status`)).json()

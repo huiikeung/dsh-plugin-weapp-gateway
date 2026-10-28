@@ -144,8 +144,8 @@ console.log('\n=== render B: populated state ===')
 const seeds = [
   'general',                                                                                 // activeSection
   [                                                                                          // devices
-    { id: 'd1', name: 'My Phone', displayName: 'My Phone (2)', online: true, connections: 2, lastSeenAt: 1758000000000 },
-    { id: 'd2', name: 'My Phone', displayName: 'My Phone (1)', online: false, connections: 0, lastSeenAt: 1757900000000 },
+    { id: 'd1', name: 'My Phone', displayName: 'My Phone (2)', online: true, connections: 2, routes: ['lan', 'public'], lastSeenAt: 1758000000000 },
+    { id: 'd2', name: 'My Phone', displayName: 'My Phone (1)', online: false, connections: 0, routes: [], lastSeenAt: 1757900000000 },
   ],
   false,                                                                                     // showAllDevices
   {                                                                                          // status
@@ -210,6 +210,10 @@ for (const [needle, what] of [
   ['✓ 已复制', 'copied state'],
   ['My Phone', 'device row name'],
   ['在线', 'device online badge (upstream simplified it)'],
+  ['局域网', 'LAN route badge on the live device row'],
+  ['公网', 'public route badge on the live device row'],
+  ['手机当前通过局域网直连（同一 Wi-Fi 或 VPN）', 'LAN badge explains the route in its tooltip'],
+  ['手机当前通过公网入口连接（公网服务器或鲸尾中继）', 'public badge explains the route in its tooltip'],
   ['My Phone (2)', 'duplicate device names are numbered via displayName'],
   ['>吊销<', 'revoke button present'],
   ['已刷新 · 10:00:00', 'refresh notice'],
@@ -397,6 +401,31 @@ for (const [needle, what] of [
 ]) check(htmlF.includes(needle), what)
 check(htmlF.includes('dash.cloudflare.com') && htmlF.includes('target="_blank"'), 'links carry the themed link styling and open in a new tab')
 
+// ------------------------------------------- render G: connection route badges
+// 可信设备徽标：每台在线设备按当前连接入口标注 局域网 / 公网 / Cloudflare 外网，
+// 直接取轮询返回的 device.routes；离线设备没有连接，不显示线路徽标。
+const routeSeeds = JSON.parse(JSON.stringify(seeds))
+routeSeeds[27] = () => new Set()
+routeSeeds[2] = true // showAllDevices so the offline row renders too
+routeSeeds[1] = [
+  { id: 'd1', name: 'LAN Phone', displayName: 'LAN Phone', online: true, connections: 1, routes: ['lan'], lastSeenAt: 1758000000000 },
+  { id: 'd2', name: 'CF Phone', displayName: 'CF Phone', online: true, connections: 2, routes: ['cloudflare'], lastSeenAt: 1758000000000 },
+  { id: 'd3', name: 'Old Phone', displayName: 'Old Phone', online: false, connections: 0, routes: [], lastSeenAt: 1757900000000 },
+]
+const routeExported = loadBundle(seededReact(routeSeeds)).factory((id) => {
+  if (id === 'react') return seededReact(routeSeeds)
+  throw new Error(`unexpected require: ${id}`)
+})
+const routeRegistrations = []
+routeExported.apply({ slots: { inject: (n, t) => t(), register: (o, c) => { routeRegistrations.push({ options: o, component: c }); return () => {} } } })
+const htmlG = renderToStaticMarkup(React.createElement(routeExported.DevicePanel, { close: () => {} }))
+for (const [needle, what] of [
+  ['局域网', 'LAN route badge rendered'],
+  ['Cloudflare 外网', 'Cloudflare route badge rendered'],
+  ['手机当前通过局域网直连（同一 Wi-Fi 或 VPN）', 'LAN badge tooltip explains the route'],
+  ['手机当前通过 Cloudflare Tunnel 外网连接', 'Cloudflare badge tooltip explains the route'],
+]) check(htmlG.includes(needle), what)
+
 // ------------------------------------------------------- source-level guarantees
 console.log('\n=== source guarantees ===')
 check(!src.includes('sidebar.footer.action'), 'no sidebar.footer.action contribution')
@@ -443,7 +472,13 @@ check(/id: 'dsh-plugin-weapp-gateway'/.test(src) && !src.includes("id: 'dsh-plug
   'module id matches the package name so the loader registers it')
 check(src.includes('/mgw/cloudflare/check') && src.includes('/mgw/cloudflare/restart'), 'cloudflare check/restart routes wired')
 check(src.includes('tunnel.publicReady === true'), 'connection advice trusts publicReady, not raw tunnel state')
+// 可信设备徽标：局域网 / 公网 / Cloudflare 外网，取自轮询的 device.routes。
+check(src.includes("lan: { label: '局域网'") && src.includes("public: { label: '公网'")
+  && src.includes("cloudflare: { label: 'Cloudflare 外网'") && src.includes('routeBadges(device).map'),
+  'trusted-device rows badge the live connection route')
+check(src.includes('if (!device || !device.online || !Array.isArray(device.routes)) return []'),
+  'offline devices and rows without route data show no route badge')
 
-console.log(`\nhtml A: ${htmlA.length} bytes · html B: ${htmlB.length} bytes · html C: ${htmlC.length} bytes · html D: ${htmlD.length} bytes · html E: ${htmlE.length} bytes`)
+console.log(`\nhtml A: ${htmlA.length} bytes · html B: ${htmlB.length} bytes · html C: ${htmlC.length} bytes · html D: ${htmlD.length} bytes · html E: ${htmlE.length} bytes · html G: ${htmlG.length} bytes`)
 if (failed) { console.error(`\n${failed} check(s) FAILED`); process.exit(1) }
 console.log('ALL CHECKS PASSED')

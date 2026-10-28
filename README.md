@@ -11,10 +11,15 @@
 - 修复默认日志路径写死成 POSIX 的 `/tmp/mobile-gateway.log`：Windows 上它会解析到「当前盘:\tmp」（一般不存在），`appendFileSync` 抛 ENOENT 又被 `log()` 的 catch 静默吞掉，运营者于是**完全看不到任何日志**——排查「手机为什么掉线」时没有任何线索。现在按平台取 `os.tmpdir()`，Windows 上落到 `%TEMP%\mobile-gateway.log`；Linux/macOS 行为不变。
 - 日志内容本身不变：连接/断开、配对、鉴权拒绝、设备撤销照旧记录。`logFile` 选项仍可覆盖，测试与并行安装仍写各自的文件。
 
-### v0.8.31 · 测试套件可在 Windows 上跑通
+### v0.8.33 · 可信设备连接线路徽标
+
+- 「设置 → 鲸尾移动网关 → 可信设备」为每台在线设备添加连接线路徽标：**局域网**（手机与 DSH 同网直连）、**公网**（公网服务器、反向代理或鲸尾中继）、**Cloudflare 外网**（命名 / Quick Tunnel）。徽标跟随手机当前实际连接实时变化，面板 3 秒轮询自动刷新，手机从 Wi-Fi 切到蜂窝即换线路。
+- 线路由网关按连接入口判定并记账：独立局域网监听、Cloudflare 隧道专属回环监听、主监听分别打上 `lan` / `cloudflare` / `public` 标签；`GET /mgw/devices` 的每个设备新增 `routes` 字段（当前活跃线路数组）。
+- 徽标为纯展示：不改变配对、鉴权与自动选路逻辑；离线设备不显示线路徽标，旧版本网关返回的设备记录没有 `routes` 时同样不显示。
 
 ### v0.8.31 · 测试套件可在 Windows 上跑通
 
+### v0.8.31 · 测试套件可在 Windows 上跑通
 - 新增 `spawnProcess` 插件选项：把 `createCloudflareTunnel` 本来就支持的注入缝从插件选项转发下去，默认仍是真实 `spawn`，不影响生产行为。
 - 修复 `setup-ip` 测试在 Windows 上必失败：测试原先直接调 `python3`，而 Windows 上 `python3`/`python` 往往只是 App Execution Alias 占位桩——能以 0 退出却什么都不做（"Python was not found; ..."）。改为依次探测 `PYTHON`/`python3`/`python`，用版本号开头判断是不是真解释器；找不到可用解释器时明确打印跳过原因，而不是抛断言。
 - 修复 `lan` 测试在 Windows 上必失败：假 cloudflared 是带 shebang 的脚本，Windows 上 spawn 直接 ENOENT；改成 `.cmd` 更糟——Node 24 起（CVE-2024-27980 修复）spawn `.cmd` 会抛 EINVAL。现在假二进制写成普通 node 脚本，经 `spawnProcess` 映射成 `node <脚本>`，POSIX 行为不变。

@@ -76,8 +76,30 @@ function expectRejected(url, options = {}) {
   assert.equal(stored.includes(pairing.code), false)
   assert.equal(stored.includes(claimed.token), false)
   if (process.platform !== 'win32') assert.equal(fs.statSync(registryFile).mode & 0o777, 0o600)
+  // Live connections carry the entry point they arrived on so the
+  // trusted-device list can badge 局域网 / 公网 / Cloudflare 外网 in real time.
   registry.connected(claimed.device.id)
   assert.equal(registry.list()[0].online, true)
+  assert.deepEqual(registry.list()[0].routes, ['public'])
+  registry.disconnected(claimed.device.id)
+  assert.equal(registry.list()[0].online, false)
+  assert.deepEqual(registry.list()[0].routes, [])
+  registry.connected(claimed.device.id, 'lan')
+  registry.connected(claimed.device.id, 'cloudflare')
+  registry.connected(claimed.device.id, 'cloudflare')
+  assert.equal(registry.list()[0].online, true)
+  assert.equal(registry.list()[0].connections, 3)
+  assert.deepEqual(registry.list()[0].routes, ['lan', 'cloudflare'])
+  registry.disconnected(claimed.device.id, 'lan')
+  assert.deepEqual(registry.list()[0].routes, ['cloudflare'])
+  assert.equal(registry.list()[0].online, true)
+  registry.disconnected(claimed.device.id, 'cloudflare')
+  registry.disconnected(claimed.device.id, 'cloudflare')
+  assert.equal(registry.list()[0].online, false)
+  assert.deepEqual(registry.list()[0].routes, [])
+  // An unknown or missing route normalizes to the main listener.
+  registry.connected(claimed.device.id, 'not-a-route')
+  assert.deepEqual(registry.list()[0].routes, ['public'])
   registry.disconnected(claimed.device.id)
   assert.equal(registry.list()[0].online, false)
   assert.equal(registry.revoke(claimed.device.id), true)
@@ -408,6 +430,8 @@ function expectRejected(url, options = {}) {
   assert.equal(devicesBody.devices.length, 1)
   assert.equal(devicesBody.devices[0].online, true)
   assert.equal(devicesBody.devices[0].connections, 2)
+  // Both channels arrived on the main listener, so the row badges 公网.
+  assert.deepEqual(devicesBody.devices[0].routes, ['public'])
 
   const rePairResponse = await fetch(`${base}/mgw/pair`, {
     method: 'POST',
