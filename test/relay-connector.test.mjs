@@ -6,11 +6,17 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { createRequire } from 'node:module'
+import { fileURLToPath } from 'node:url'
 import { createRelayConnector, resolveStateDir } from '../lib/relay-connector.mjs'
 import { shouldRunRelayConnector } from '../lib/relay-state.mjs'
 
 const require = createRequire(import.meta.url)
 const WebSocket = require('ws')
+
+// Windows 上 file URL 的 pathname 是 "/D:/…"，当作路径交给 spawn 会被解析成
+// "D:\D:\…"——模块找不到，连接器根本起不来。生产代码（lib/relay-connector.mjs）
+// 用的是 fileURLToPath，测试必须和它一致。
+const CONNECTOR_SCRIPT = fileURLToPath(new URL('../relay/agent-connector.js', import.meta.url))
 
 let checks = 0
 function check(ok, what) {
@@ -215,7 +221,7 @@ for (const relay of ['', 'wss://relay.ahwe.top', 'wss://relay.ahwe.top/relay/'])
   const parent = spawnChild(process.execPath, ['-e', 'setTimeout(() => {}, 60000)'], { stdio: 'ignore' })
   await new Promise((resolve, reject) => { parent.once('spawn', resolve); parent.once('error', reject) })
   const connector = spawnChild(process.execPath,
-    [new URL('../relay/agent-connector.js', import.meta.url).pathname], {
+    [CONNECTOR_SCRIPT], {
       env: {
         ...process.env,
         RELAY_URL: `ws://127.0.0.1:${relayPort}/relay`,

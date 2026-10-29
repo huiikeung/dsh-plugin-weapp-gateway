@@ -91,6 +91,19 @@ async function startLifetime({ temp, lanPort, relayPort, deviceFile, gatewayStat
   }
   let aborted = false
   const request_signal_aborted = () => aborted
+  // 记录内置连接器每次启动拿到的环境变量。用注入缝包住真正的 spawn：连接器照旧
+  // 真跑，我们只是旁观。原先靠 `ps eww -p <pid>` 读别的进程环境，那是 POSIX 专有，
+  // Windows 上既没有 ps 也读不到环境，断言必然失败。
+  const connectorLaunches = []
+  const recordingSpawnProcess = (command, args, options) => {
+    if (args.some((arg) => String(arg).includes('agent-connector'))) {
+      connectorLaunches.push({ pid: undefined, env: options && options.env })
+    }
+    const child = spawn(command, args, options)
+    const last = connectorLaunches[connectorLaunches.length - 1]
+    if (last && last.env === (options && options.env)) last.pid = child.pid
+    return child
+  }
   // The real host has its port bound before plugins apply (the bundled
   // connector builds GATEWAY_URL from it at apply time), so bind first.
   server.listen(0, '127.0.0.1')
@@ -110,10 +123,12 @@ async function startLifetime({ temp, lanPort, relayPort, deviceFile, gatewayStat
     lanEnabled: true,
     lanHost: '127.0.0.1',
     lanPort,
+    spawnProcess: recordingSpawnProcess,
   })
   return {
     webServer,
     base: `http://127.0.0.1:${webServer.port}`,
+    connectorLaunches,
     stop: async () => {
       aborted = true
       disposePlugin()
@@ -248,13 +263,12 @@ async function startLifetime({ temp, lanPort, relayPort, deviceFile, gatewayStat
   const secondConnectorStatus = (await (await fetch(`${second.base}/mgw/status`)).json()).relayConnector
   assert.equal(secondConnectorStatus.running, true, 'the connector is respawned after the restart')
   assert.notEqual(secondConnectorStatus.pid, firstConnectorPid, 'a fresh connector process replaces the dead one')
-  const connectorEnv = spawn('ps', ['eww', '-p', String(secondConnectorStatus.pid)], { encoding: 'utf8' })
-  let psOut = ''
-  connectorEnv.stdout.on('data', (chunk) => { psOut += chunk })
-  await once(connectorEnv, 'close')
-  assert.ok(psOut.includes(`GATEWAY_URL=ws://127.0.0.1:${second.webServer.port}/ws/mobile`),
-    `the respawned connector dials the new web port (got: ${psOut.slice(0, 300)})`)
-  assert.ok(!psOut.includes(`GATEWAY_URL=ws://127.0.0.1:${firstGatewayPort}`),
+  // 环境变量从注入缝记录，不靠 ps 读别的进程（POSIX 专有，Windows 上不可用）。
+  const respawned = second.connectorLaunches.find((launch) => launch.pid === secondConnectorStatus.pid)
+  assert.ok(respawned, 'the respawned connector was launched through the injected spawn')
+  assert.equal(respawned.env.GATEWAY_URL, `ws://127.0.0.1:${second.webServer.port}/ws/mobile`,
+    'the respawned connector dials the new web port')
+  assert.notEqual(respawned.env.GATEWAY_URL, `ws://127.0.0.1:${firstGatewayPort}/ws/mobile`,
     'the respawned connector does not keep the dead port')
 
   reconnected.close()

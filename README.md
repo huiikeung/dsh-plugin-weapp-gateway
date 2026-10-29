@@ -6,6 +6,12 @@
 
 `dsh-plugin-weapp-gateway` · DeepSeek Harness 移动客户端连接插件
 
+### v0.8.35 · 修复 Windows 上的连接器测试
+
+- 插件把 `spawnProcess` 选项转发给内置中继连接器，与 Cloudflare 隧道已有的注入缝一致；默认仍是真实 `spawn`，生产行为不变。测试可用它包住真实子进程并记录启动环境，无需依赖平台专有的进程检查工具。
+- 修复 `relay-connector` 测试用 `URL.pathname` 生成连接器脚本路径：Windows 上会得到 `/D:/…`，交给 `spawn` 后变成 `D:\D:\…`，连接器无法启动。改用与生产代码一致的 `fileURLToPath`。
+- 修复 `restart-reconnect` 测试用 POSIX 的 `ps eww` 读取连接器环境变量：改为通过注入缝记录真实的 `GATEWAY_URL`，在 Windows 与 POSIX 上都能验证重启后连接器拨向新端口。32 个测试文件全部通过。
+
 ### v0.8.32 · 修复 Windows 上网关完全没有日志
 
 - 修复默认日志路径写死成 POSIX 的 `/tmp/mobile-gateway.log`：Windows 上它会解析到「当前盘:\tmp」（一般不存在），`appendFileSync` 抛 ENOENT 又被 `log()` 的 catch 静默吞掉，运营者于是**完全看不到任何日志**——排查「手机为什么掉线」时没有任何线索。现在按平台取 `os.tmpdir()`，Windows 上落到 `%TEMP%\mobile-gateway.log`；Linux/macOS 行为不变。
