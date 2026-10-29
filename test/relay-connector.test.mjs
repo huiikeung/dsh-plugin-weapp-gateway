@@ -5,8 +5,12 @@ import { spawn as spawnChild } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { createRequire } from 'node:module'
 import { createRelayConnector, resolveStateDir } from '../lib/relay-connector.mjs'
 import { shouldRunRelayConnector } from '../lib/relay-state.mjs'
+
+const require = createRequire(import.meta.url)
+const WebSocket = require('ws')
 
 let checks = 0
 function check(ok, what) {
@@ -154,6 +158,88 @@ for (const relay of ['', 'wss://relay.ahwe.top', 'wss://relay.ahwe.top/relay/'])
   await new Promise((resolve) => setTimeout(resolve, 120))
   check(spawned.length === 2, 'a crashed child is restarted after the delay')
   supervisor.dispose()
+}
+
+// 7) the spawned child is tied to this process: after an unclean DSH exit a
+// survivor would keep the pid lock and dial the dead web port, so every
+// later restart would delegate to it and relay-routed phones could never
+// reconnect.
+{
+  const { spawnProcess, spawned } = fakeSpawn()
+  const supervisor = createRelayConnector({
+    relay: 'wss://r.example.com', gatewayUrl: 'ws://127.0.0.1:2298/ws/mobile',
+    stateDir: path.join(temp, 'parent'), spawnProcess,
+  })
+  supervisor.start()
+  check(spawned[0].options.env.PARENT_PID === String(process.pid),
+    'the bundled connector is told which process spawned it')
+  supervisor.dispose()
+}
+
+// 8) delegation is re-checked: a holder that dies while we defer to it must
+// not strand relay-routed phones on a bridge dialling a dead port.
+{
+  const stateDir = path.join(temp, 'delegated-dies')
+  fs.mkdirSync(stateDir, { recursive: true })
+  const holder = spawnChild(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' })
+  await new Promise((resolve, reject) => { holder.once('spawn', resolve); holder.once('error', reject) })
+  try {
+    fs.writeFileSync(path.join(stateDir, 'connector.lock'), `${JSON.stringify({ pid: holder.pid })}\n`)
+    const { spawnProcess, spawned } = fakeSpawn()
+    const supervisor = createRelayConnector({
+      relay: 'wss://r.example.com', stateDir, spawnProcess, delegationRecheckMs: 60,
+    })
+    const deferred = supervisor.start()
+    check(spawned.length === 0 && deferred.delegatedTo === holder.pid, 'the live holder is deferred to')
+    holder.kill()
+    await new Promise((resolve) => setTimeout(resolve, 300))
+    const tookOver = supervisor.snapshot()
+    check(spawned.length === 1 && tookOver.running === true && tookOver.delegatedTo === null,
+      'the supervisor takes over once the delegated holder disappears')
+    supervisor.dispose()
+    check(spawned[0].killed === true, 'the takeover child is stopped on dispose')
+  } finally {
+    try { holder.kill() } catch { /* already gone */ }
+  }
+}
+
+// 9) the real bundled connector honours PARENT_PID: it exits and releases
+// the pid lock when the process that spawned it dies, so the next DSH
+// launch can take the identity over instead of deferring to a zombie.
+{
+  const stateDir = path.join(temp, 'real-connector')
+  fs.mkdirSync(stateDir, { recursive: true })
+  const relayPort = 39899
+  const relay = new WebSocket.Server({ port: relayPort, path: '/relay' })
+  relay.on('connection', () => {})
+  const parent = spawnChild(process.execPath, ['-e', 'setTimeout(() => {}, 60000)'], { stdio: 'ignore' })
+  await new Promise((resolve, reject) => { parent.once('spawn', resolve); parent.once('error', reject) })
+  const connector = spawnChild(process.execPath,
+    [new URL('../relay/agent-connector.js', import.meta.url).pathname], {
+      env: {
+        ...process.env,
+        RELAY_URL: `ws://127.0.0.1:${relayPort}/relay`,
+        GATEWAY_URL: 'ws://127.0.0.1:1/ws/mobile',
+        MGMT_URL: 'http://127.0.0.1:1',
+        STATE_DIR: stateDir,
+        PARENT_PID: String(parent.pid),
+      },
+      stdio: 'ignore',
+    })
+  const alive = (pid) => { try { process.kill(pid, 0); return true } catch { return false } }
+  try {
+    await new Promise((resolve) => setTimeout(resolve, 1_200))
+    check(alive(connector.pid), 'the connector runs while its parent lives')
+    check(fs.existsSync(path.join(stateDir, 'connector.lock')), 'the connector holds the pid lock')
+    parent.kill()
+    await new Promise((resolve) => setTimeout(resolve, 7_000))
+    check(!alive(connector.pid), 'the connector exits after its spawning process dies')
+    check(!fs.existsSync(path.join(stateDir, 'connector.lock')), 'the pid lock is released for the next launch')
+  } finally {
+    try { parent.kill() } catch { /* already gone */ }
+    try { connector.kill() } catch { /* already gone */ }
+    relay.close()
+  }
 }
 
 console.log(`\nrelay-connector: ${checks} checks passed`)

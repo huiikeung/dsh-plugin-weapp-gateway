@@ -151,9 +151,16 @@ try {
   assert.equal((await a.request('status')).data.gatewayMode, 'temporary')
   await delay(180)
   assert.equal((await a.request('status')).data.gatewayMode, 'disabled')
+  // The automatic disable is a runtime safety net, not a preference change:
+  // persisting it would silently overwrite the operator's saved 'temporary'
+  // choice, so the next restart would boot closed and reject every phone
+  // reconnect until somebody re-enabled the gateway by hand.
   a.restart()
-  assert.equal((await a.request('status')).data.gatewayMode, 'disabled')
-  passed('legacy management toggle, temporary restart timer and persisted automatic disable')
+  const afterAutoDisable = (await a.request('status')).data
+  assert.equal(afterAutoDisable.gatewayMode, 'temporary')
+  assert.equal(afterAutoDisable.gatewayEnabled, true)
+  assert.equal(typeof afterAutoDisable.waitExpiresAt, 'number')
+  passed('legacy management toggle, temporary restart timer and non-persisted automatic disable')
 
   await a.request('gateway', { mode: 'temporary' })
   await a.request('gateway', { mode: 'persistent' })

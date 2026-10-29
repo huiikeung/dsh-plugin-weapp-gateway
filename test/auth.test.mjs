@@ -26,6 +26,18 @@ function waitForMessage(ws, kind) {
   })
 }
 
+// The server finishes its own close bookkeeping slightly after the client's
+// close event, so device counts are awaited by polling rather than assumed.
+async function waitForDeviceConnections(base, expected) {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const body = await (await fetch(`${base}/mgw/devices`)).json()
+    const device = body.devices[0]
+    if (device && device.connections === expected) return device
+    await new Promise((resolve) => setTimeout(resolve, 20))
+  }
+  throw new Error(`device connections did not become ${expected}`)
+}
+
 function expectRejected(url, options = {}) {
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(url, options)
@@ -425,13 +437,12 @@ function expectRejected(url, options = {}) {
   conversationSocket.close()
   await conversationClosed
 
-  const devicesResponse = await fetch(`${base}/mgw/devices`)
-  const devicesBody = await devicesResponse.json()
-  assert.equal(devicesBody.devices.length, 1)
-  assert.equal(devicesBody.devices[0].online, true)
-  assert.equal(devicesBody.devices[0].connections, 2)
+  // The client's close event resolves before the server finishes its own
+  // close bookkeeping, so poll instead of snapshotting one response.
+  const settledDevice = await waitForDeviceConnections(base, 2)
+  assert.equal(settledDevice.online, true)
   // Both channels arrived on the main listener, so the row badges 公网.
-  assert.deepEqual(devicesBody.devices[0].routes, ['public'])
+  assert.deepEqual(settledDevice.routes, ['public'])
 
   const rePairResponse = await fetch(`${base}/mgw/pair`, {
     method: 'POST',
@@ -450,10 +461,8 @@ function expectRejected(url, options = {}) {
   const rePairedFrame = await rePairedPromise
   assert.equal(rePairedFrame.device.id, pairedFrame.device.id)
   assert.notEqual(rePairedFrame.token, pairedFrame.token)
-  const rePairedDevices = await (await fetch(`${base}/mgw/devices`)).json()
-  assert.equal(rePairedDevices.devices.length, 1)
-  assert.equal(rePairedDevices.devices[0].name, 'Integration iPhone Renamed')
-  assert.equal(rePairedDevices.devices[0].connections, 3)
+  const rePairedDevice = await waitForDeviceConnections(base, 3)
+  assert.equal(rePairedDevice.name, 'Integration iPhone Renamed')
   assert.equal(await expectRejected(wsUrl, { headers: { Authorization: `Bearer ${pairedFrame.token}` } }), 401)
 
   const closePromise = once(tokenSocket, 'close')

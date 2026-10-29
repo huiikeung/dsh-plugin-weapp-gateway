@@ -55,6 +55,25 @@ process.on('exit', () => {
   try { if (JSON.parse(fs.readFileSync(lockFile, 'utf8')).pid === process.pid) fs.unlinkSync(lockFile); } catch {}
 });
 
+// 父进程守护（仅插件内置连接器）：DSH 崩溃或强退时，子进程会被过继给 init 继续
+// 存活——它占着 pid 锁、拨已死亡的端口，之后每次 DSH 重启都只会委派给这个僵尸，
+// 手机的中继线路永久重连不上。插件启动时注入 PARENT_PID；手动运行
+// （systemd / nohup）不设置该变量，行为完全不变。POSIX 上父进程死亡后 ppid 会被
+// 改写，同时兜住 pid 复用。
+const PARENT_PID = Number(process.env.PARENT_PID) || 0;
+if (PARENT_PID > 0) {
+  const startupPpid = process.ppid;
+  const parentGone = () => {
+    if (process.ppid !== startupPpid) return true;
+    try { process.kill(PARENT_PID, 0); return false; } catch (e) { return e.code === 'ESRCH'; }
+  };
+  setInterval(() => {
+    if (!parentGone()) return;
+    console.log('[' + new Date().toISOString() + '] parent process ' + PARENT_PID + ' exited; connector shutting down');
+    process.exit(0);
+  }, 5000).unref?.();
+}
+
 // ---------- 身份 ----------
 
 const PROTOCOL = 'dsh-weapp-e2ee-v1';
