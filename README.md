@@ -2,9 +2,13 @@
   <img src="docs/assets/whale-girl-ios-app-promo-16x9.png" alt="DeepSeek Harness Mobile 与移动网关" width="100%">
 </p>
 
-# 鲸尾移动网关
+# 鲸尾网关助手
 
 `dsh-plugin-weapp-gateway` · DeepSeek Harness 移动客户端连接插件
+
+### v0.8.36 · 更名为鲸尾网关助手
+
+- 设置入口、管理面板标题及中文插件元数据统一更名为「鲸尾网关助手」；同步更新导航图标和设置页渲染测试、README 与 FnOS 使用指南。协议标识和「移动网关」功能描述保持不变。
 
 ### v0.8.35 · 修复 Windows 上的连接器测试
 
@@ -27,7 +31,7 @@
 
 ### v0.8.33 · 可信设备连接线路徽标
 
-- 「设置 → 鲸尾移动网关 → 可信设备」为每台在线设备添加连接线路徽标：**局域网**（手机与 DSH 同网直连）、**公网**（公网服务器、反向代理或鲸尾中继）、**Cloudflare 外网**（命名 / Quick Tunnel）。徽标跟随手机当前实际连接实时变化，面板 3 秒轮询自动刷新，手机从 Wi-Fi 切到蜂窝即换线路。
+- 「设置 → 鲸尾网关助手 → 可信设备」为每台在线设备添加连接线路徽标：**局域网**（手机与 DSH 同网直连）、**公网**（公网服务器、反向代理或鲸尾中继）、**Cloudflare 外网**（命名 / Quick Tunnel）。徽标跟随手机当前实际连接实时变化，面板 3 秒轮询自动刷新，手机从 Wi-Fi 切到蜂窝即换线路。
 - 线路由网关按连接入口判定并记账：独立局域网监听、Cloudflare 隧道专属回环监听、主监听分别打上 `lan` / `cloudflare` / `public` 标签；`GET /mgw/devices` 的每个设备新增 `routes` 字段（当前活跃线路数组）。
 - 徽标为纯展示：不改变配对、鉴权与自动选路逻辑；离线设备不显示线路徽标，旧版本网关返回的设备记录没有 `routes` 时同样不显示。
 
@@ -115,7 +119,7 @@
 
 ### v0.8.9 · 插件在线更新
 
-- 打开「设置 → 鲸尾移动网关」时自动检查 npm 最新版本，并可在面板中一键安装更新。
+- 打开「设置 → 鲸尾网关助手」时自动检查 npm 最新版本，并可在面板中一键安装更新。
 - DSH 宿主支持插件管理时直接升级；旧版宿主会给出 Terminal 安装命令。构建脚本审批不会自动批准，要求重启时需手动重启 DSH。
 - 接入小程序订阅通知：通过一次性通知票据，在对应会话轮次结束后回调通知服务，不发送任务正文。
 
@@ -127,13 +131,13 @@
 
 协议与客户端处理约定见 [文件变更接入说明](docs/workspace-changes-mobile-integration.md)。
 
-DeepSeek Harness 的设备鉴权移动连接插件，支持会话与实时事件、排队消息同步及编辑/删除/Steer、Session 归档和重命名的双向同步、停止当前生成并稍后继续、任务列表和当前 Goal 同步及管理、服务端驱动的命令和技能菜单、Human-in-the-loop、图片及文件传输。本 fork 不占用侧边栏：全部管理能力集中在 Harness WebUI 的「设置 → 鲸尾移动网关」页面，可直接开启连接服务、生成配对二维码和管理可信设备；离开该页面即停止轮询，不再有任何悬浮层。
+DeepSeek Harness 的设备鉴权移动连接插件，支持会话与实时事件、排队消息同步及编辑/删除/Steer、Session 归档和重命名的双向同步、停止当前生成并稍后继续、任务列表和当前 Goal 同步及管理、服务端驱动的命令和技能菜单、Human-in-the-loop、图片及文件传输。本 fork 不占用侧边栏：全部管理能力集中在 Harness WebUI 的「设置 → 鲸尾网关助手」页面，可直接开启连接服务、生成配对二维码和管理可信设备；离开该页面即停止轮询，不再有任何悬浮层。
 
 > 当前源码以 **DSH 0.2.0-rc.2** 为适配基线，使用 Session format 4；旧版历史游标需重新取得基线。
 >
 > 实时流已改为独立 `assistant-stream` 帧，移动端需要按 [rc.2 接入说明](docs/dsh-rc2-mobile-integration.md) 更新订阅、缓存与分页处理。当前修改尚未发布。
 >
-> v0.7.7：同步上游 v0.8.0（DSH 0.1.7-rc.2 / Session format 4、inbox 排队消息同步、Schedule 与 Permission Presets、审批 `displayReason`），管理界面仅保留在「设置 → 鲸尾移动网关」，不再提供侧边栏入口。
+> v0.7.7：同步上游 v0.8.0（DSH 0.1.7-rc.2 / Session format 4、inbox 排队消息同步、Schedule 与 Permission Presets、审批 `displayReason`），管理界面仅保留在「设置 → 鲸尾网关助手」，不再提供侧边栏入口。
 >
 > v0.8.6（续）：修复 DSH 0.2.1 宿主上所有 Remote 请求崩溃——`Cannot read properties of undefined (reading 'signal')`。0.2.1-alpha 起 `InvokeRemoteRequest.peer` 改为必填（`assertPeerLive` 与 `methodSignal` 都会读 `peer.signal`，流式方法还会并入它），而适配器此前只传 `{namespace, method, args, signal}`；工作区/会话/历史全部不可用，只剩 `default-model`（不走 Remote Gateway）正常。现在适配器以自己的 owner Peer 发言（随插件 dispose 中止），0.1.7/0.2.0 宿主忽略该字段，因此新旧宿主通吃。附 0.2.1 宿主形状的回归测试。
 >
@@ -164,7 +168,7 @@ DeepSeek Harness 的设备鉴权移动连接插件，支持会话与实时事件
 > v0.8.4：修复中继模式下打开面板地址栏仍显示 Cloudflare 地址
 >
 > v0.8.5：扫码成功后二维码弹窗自动关闭——服务端暴露待用配对码 ID，面板轮询发现自己的码被消费即关闭，不用等 5 分钟过期或手动关。——refresh() 原先只看本地路由 ref（初始 auto），现在先采纳服务端的 pairingMode 再推导地址，打开即显示中继地址。——原先用在捕获阶段 stopPropagation 阻止设置页插件折叠导航，但 React 的 onClick 委托在 document 根，捕获阶段拦截会连自己的 handler 一起掐死。改为 MutationObserver 监听并即时还原折叠，不碰事件。——弹窗导航按钮固定 40px 高度（不再塌成文字高度）；点导航不再被设置页插件折叠成汉堡按钮（捕获阶段拦截 + 自我恢复）；中继设备自动命名（连接器每次连接都上报手机型号 header，网关据此更新设备名）。——换用上游 client.js 时把 id: 'dsh-plugin-mobile-gateway' 一并带入，加载器按包名找不到注册项，整个插件条目被剔除（设置页消失）。现改回 dsh-plugin-weapp-gateway 并加防回归守卫。
-> v0.7.8：同步上游 v0.8.1（PC 端可开启 Cloudflare Quick / 命名 Tunnel、配对面板增加局域网与外网入口选择指引、工具菜单可重启网关或停止 DSH Web），管理界面仅保留在「设置 → 鲸尾移动网关」。
+> v0.7.8：同步上游 v0.8.1（PC 端可开启 Cloudflare Quick / 命名 Tunnel、配对面板增加局域网与外网入口选择指引、工具菜单可重启网关或停止 DSH Web），管理界面仅保留在「设置 → 鲸尾网关助手」。
 >
 > v0.7.9：Cloudflare Tunnel 扩展到 Linux 服务器（本 fork 定制）：上游仅支持 Windows/macOS 自动下载校验 `cloudflared`，本 fork 允许在 Linux 上使用 Cloudflare 官方 apt 源安装的 `cloudflared`（或配置 `cloudflaredPath` 指向任意可执行文件），隧道机制不变。
 >
@@ -199,7 +203,7 @@ DeepSeek Harness 的设备鉴权移动连接插件，支持会话与实时事件
 
 插件提供稳定 `gatewayId`、可配置 `gatewayName`、配对候选地址列表，以及可持久化的“关闭 / 临时开启 / 常驻开启”运行模式。一个 App 可以分别配对不同机器上的网关；客户端多网关管理仍需按 [App 对接说明](docs/multi-gateway-app-integration.md) 实现。本次源码尚未发布新的 npm 版本。
 
-在“鲸尾移动网关”面板选择“常驻开启”，网关会持续接受已授权设备连接，重启后保持。常驻需要 DSH 进程运行、机器未休眠且网络可达，不提供自动发现或网络中转。
+在“鲸尾网关助手”面板选择“常驻开启”，网关会持续接受已授权设备连接，重启后保持。常驻需要 DSH 进程运行、机器未休眠且网络可达，不提供自动发现或网络中转。
 
 部署配置示例（对应 mobile-gateway 插件的 `config`）：
 
@@ -270,13 +274,13 @@ npx --yes dsh-plugin-weapp-gateway@latest init
 dsh web
 ```
 
-打开 WebUI，进入「设置」确认出现「鲸尾移动网关」页面（侧边栏不会新增入口）。
+打开 WebUI，进入「设置」确认出现「鲸尾网关助手」页面（侧边栏不会新增入口）。
 
 ## 局域网配对
 
 适用于 DSH 电脑与 DSH App 或鲸尾小程序位于同一个可互访的局域网。
 
-1. 在 WebUI 的「设置」中打开“鲸尾移动网关”。
+1. 在 WebUI 的「设置」中打开“鲸尾网关助手”。
 2. 将“网关运行模式”设为“常驻开启”（短期配对也可选“临时开启”）。
 3. 保持“设备鉴权”开启。
 4. 在“配对连接方式”选择“局域网直连”，确认 WebSocket 地址为 `ws://<电脑局域网 IP>:3081/ws/mobile`。即使 Cloudflare Tunnel 已开启，也无需关闭它。选择框旁的问号会按当前网关环境解释各入口并给出场景建议，不会自动更改选择。
@@ -334,7 +338,7 @@ http://127.0.0.1:<本地端口>
 
 ### 4. 在 UI 配置公网入口
 
-在 WebUI「设置 → 鲸尾移动网关」中打开面板，在“公网接入”填写云厂商控制台提供的公网 IPv4，然后点击“配置公网接入”或“更新公网配置”。Helper 会自动读取当前 `dsh web` 端口并配置 Nginx、TLS 证书和 `wss://<公网 IP>/ws/mobile`。
+在 WebUI「设置 → 鲸尾网关助手」中打开面板，在“公网接入”填写云厂商控制台提供的公网 IPv4，然后点击“配置公网接入”或“更新公网配置”。Helper 会自动读取当前 `dsh web` 端口并配置 Nginx、TLS 证书和 `wss://<公网 IP>/ws/mobile`。
 
 <p align="center">
   <img src="docs/assets/public-access-ui.png" alt="在移动设备面板配置公网接入" width="420">
@@ -359,7 +363,7 @@ http://127.0.0.1:<本地端口>
 
 ### Cloudflare Quick Tunnel（一键临时接入）
 
-在「鲸尾移动网关 → 连接与配对」展开 Cloudflare 外网设置，选择「Quick Tunnel · 无需域名」并点击「一键开启」。面板连接后会取得随机的 `wss://<名称>.trycloudflare.com/ws/mobile`。生成“自动选择”二维码后，DSH App 会自动尝试公网 WSS 与局域网候选地址；小程序则走鲸尾中继或局域网。原有“鲸尾公网 · 小程序”专用中继选项仍可单独使用。关闭开关会停止隧道；DSH 再次启动时会恢复已开启的 Quick 模式并取得**新的随机地址**。
+在「鲸尾网关助手 → 连接与配对」展开 Cloudflare 外网设置，选择「Quick Tunnel · 无需域名」并点击「一键开启」。面板连接后会取得随机的 `wss://<名称>.trycloudflare.com/ws/mobile`。生成“自动选择”二维码后，DSH App 会自动尝试公网 WSS 与局域网候选地址；小程序则走鲸尾中继或局域网。原有“鲸尾公网 · 小程序”专用中继选项仍可单独使用。关闭开关会停止隧道；DSH 再次启动时会恢复已开启的 Quick 模式并取得**新的随机地址**。
 
 Quick Tunnel 无需 Cloudflare 账户、Token 或自己的公网域名，但地址在 DSH 重启或隧道重连后可能变化。若隧道地址变化，重新生成二维码供 DSH App 或小程序配对；**仅凭 PC 在线不能保证旧地址继续可用**。Cloudflare 将 Quick Tunnel 定位于测试和开发，当前有并发请求上限且不提供可用性保证。参见 [Cloudflare Quick Tunnel 文档](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/do-more-with-tunnels/trycloudflare/)。
 
@@ -367,7 +371,7 @@ Quick Tunnel 无需 Cloudflare 账户、Token 或自己的公网域名，但地�
 
 ### Cloudflare 命名 Tunnel（固定地址）
 
-面板（「鲸尾移动网关 → Cloudflare Tunnel」选「命名 Tunnel」）里内置了两个跳转链接：
+面板（「鲸尾网关助手 → Cloudflare Tunnel」选「命名 Tunnel」）里内置了两个跳转链接：
 [Cloudflare 控制台 → 隧道](https://dash.cloudflare.com/?to=/:account/tunnels) 和
 [官方创建教程](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/get-started/create-remote-tunnel/)。
 
@@ -393,7 +397,7 @@ echo 'deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudf
 apt-get update && apt-get install -y cloudflared
 ```
 
-安装后「鲸尾移动网关 → Cloudflare Tunnel」分组即出现在面板（与 Windows/macOS 相同）。插件按以下顺序定位程序：profile 配置里的 `cloudflaredPath`（绝对路径优先），否则在 PATH 中查找 `cloudflared`；都不存在时面板会提示上面的安装命令。其余行为（Quick / 命名模式、配对地址自动填入、Token 保存、`/ws/mobile` 之外一律 404）与 PC 完全一致；Linux 同样不会监听 DSH WebUI 或 `/mgw` 的对外路径。
+安装后「鲸尾网关助手 → Cloudflare Tunnel」分组即出现在面板（与 Windows/macOS 相同）。插件按以下顺序定位程序：profile 配置里的 `cloudflaredPath`（绝对路径优先），否则在 PATH 中查找 `cloudflared`；都不存在时面板会提示上面的安装命令。其余行为（Quick / 命名模式、配对地址自动填入、Token 保存、`/ws/mobile` 之外一律 404）与 PC 完全一致；Linux 同样不会监听 DSH WebUI 或 `/mgw` 的对外路径。
 
 #### 公网入口检测与状态含义
 
@@ -469,11 +473,11 @@ sudo env "PATH=$PATH" npx --yes dsh-plugin-weapp-gateway@latest remove-helper
 
 | 现象 | 处理方式 |
 |---|---|
-| 「设置」里没有“鲸尾移动网关” | 确认安装在 `web` profile，并完整重启 `dsh web` |
+| 「设置」里没有“鲸尾网关助手” | 确认安装在 `web` profile，并完整重启 `dsh web` |
 | iOS 收到 `503` | 回到 WebUI 开启“允许移动设备连接” |
 | iOS 收到 `401` | 在 WebUI 重新生成二维码并配对 |
 | Linux 服务器公网连接超时 | 检查云安全组、服务器防火墙和 TCP `80/443` |
-| Linux 服务器公网地址没有显示 | 在“鲸尾移动网关 → 公网接入”填写公网 IPv4 并点击更新 |
+| Linux 服务器公网地址没有显示 | 在“鲸尾网关助手 → 公网接入”填写公网 IPv4 并点击更新 |
 | Cloudflare 下载失败 | 检查 PC 到 GitHub Releases 的连接；也可自行安装 cloudflared，并把 `cloudflaredPath` 设为可执行文件的绝对路径 |
 | Quick Tunnel 重启后 App 无法连接 | Quick 地址可能已变化，在面板重新生成二维码并让 App 扫码更新配对；需要固定地址时改用命名 Tunnel |
 | 面板提示未找到 cloudflared（Linux） | 按上文 apt 命令安装 Cloudflare 官方 `cloudflared`，或把 `cloudflaredPath` 指向已有可执行文件后重启 |
