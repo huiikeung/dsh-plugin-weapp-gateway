@@ -182,6 +182,25 @@ function expectRejected(url, options = {}) {
           assert.ok(request.signal instanceof AbortSignal)
           return { text: '测试语音', audioSeconds: 1, inferenceSeconds: 0.1 }
         }
+        if (request.namespace === 'llm' && request.method === 'discoverModels') {
+          assert.equal(request.args.settingsNs, 'llm-pi-ai')
+          assert.equal(request.args.request.provider, 'pi-ai')
+          assert.equal(request.args.request.apiKey, 'sk-paired-test')
+          return [{ id: 'pi-ai/chat', name: 'Pi Chat', vendor: 'dropped-by-gateway' }]
+        }
+        if (request.namespace === 'settings' && request.method === 'describe') {
+          return { writable: true, hasDocument: true, namespaces: [
+            { ns: 'llm-pi-ai', revision: 1, value: { providers: { 'pi-ai': { apiKeyEnv: 'PI_AI_API_KEY' } } } },
+          ] }
+        }
+        if (request.namespace === 'credentials' && request.method === 'describe') {
+          return { [request.args.refs[0]]: { configured: false, writable: true } }
+        }
+        if (request.namespace === 'credentials' && request.method === 'set') {
+          assert.equal(request.args.ref, 'PI_AI_API_KEY')
+          assert.equal(request.args.value, 'sk-paired-value')
+          return undefined
+        }
         throw new Error('unexpected Remote invocation')
       },
       async stream(request) {
@@ -281,6 +300,16 @@ function expectRejected(url, options = {}) {
     assert.equal(frame.code, 'authentication-required')
     assert.equal(frame.requestId, type)
   }
+  // Model configuration is paired-device-only, exactly like plugin management:
+  // an anonymous connection cannot discover models or touch credentials.
+  for (const type of ['llm-discover-models', 'model-credential-describe', 'model-credential-set']) {
+    const response = waitForMessage(debugSocket, 'error')
+    debugSocket.send(JSON.stringify({ type, requestId: type, ns: 'llm-pi-ai', provider: 'pi-ai',
+      ref: 'PI_AI_API_KEY', value: 'sk-denied' }))
+    const frame = await response
+    assert.equal(frame.code, 'authentication-required')
+    assert.equal(frame.requestId, type)
+  }
 
   const debugClosePromise = once(debugSocket, 'close')
   const enableAuthResponse = await fetch(`${base}/mgw/auth`, {
@@ -367,6 +396,7 @@ function expectRejected(url, options = {}) {
     'goals',
     'schedule-management',
     'plugin-management-v1',
+    'llm-model-config-v1',
     'speech-input-v1',
     'session-cancel',
     'queue-control',
@@ -387,6 +417,30 @@ function expectRejected(url, options = {}) {
   const speechTranscript = waitForMessage(pairedSocket, 'speech-transcript')
   pairedSocket.send(JSON.stringify({ type: 'speech-transcribe', requestId: 'speech-record', audioBase64: 'AA==' }))
   assert.equal((await speechTranscript).text, '测试语音')
+
+  // Paired model configuration crosses the real WebSocket dispatch: discovery
+  // sanitises Host fields, credentials are described/written, and the one-shot
+  // apiKey or written value never comes back.
+  const discovery = waitForMessage(pairedSocket, 'llm-discover-models')
+  pairedSocket.send(JSON.stringify({ type: 'llm-discover-models', requestId: 'discover-paired',
+    ns: 'llm-pi-ai', provider: 'pi-ai', apiKey: 'sk-paired-test' }))
+  const discoveryFrame = await discovery
+  assert.equal(discoveryFrame.requestId, 'discover-paired')
+  assert.deepEqual(discoveryFrame.models, [{ id: 'pi-ai/chat', name: 'Pi Chat' }])
+  assert.equal(JSON.stringify(discoveryFrame).includes('sk-paired-test'), false)
+  const credentialDescription = waitForMessage(pairedSocket, 'model-credential-describe')
+  pairedSocket.send(JSON.stringify({ type: 'model-credential-describe', requestId: 'credential-paired',
+    ref: 'PI_AI_API_KEY' }))
+  assert.deepEqual(await credentialDescription, { kind: 'model-credential-describe',
+    requestId: 'credential-paired', configured: false, writable: true })
+  const credentialWrite = waitForMessage(pairedSocket, 'model-credential-set')
+  pairedSocket.send(JSON.stringify({ type: 'model-credential-set', requestId: 'credential-write',
+    ref: 'PI_AI_API_KEY', value: 'sk-paired-value' }))
+  assert.deepEqual(await credentialWrite, { kind: 'model-credential-set',
+    requestId: 'credential-write', saved: true })
+  const missingRequestId = waitForMessage(pairedSocket, 'error')
+  pairedSocket.send(JSON.stringify({ type: 'llm-discover-models', ns: 'llm-pi-ai', provider: 'pi-ai' }))
+  assert.equal((await missingRequestId).code, 'bad-request')
   const connectedStatus = await (await fetch(`${base}/mgw/status`)).json()
   assert.equal(connectedStatus.gatewayEnabled, true)
   assert.equal(connectedStatus.waitExpiresAt, null)
@@ -433,6 +487,10 @@ function expectRejected(url, options = {}) {
   const wrongChannel = waitForMessage(conversationSocket, 'error')
   conversationSocket.send(JSON.stringify({ type: 'speech-catalog', requestId: 'wrong-speech-channel' }))
   assert.equal((await wrongChannel).code, 'wrong-channel')
+  const wrongChannelModel = waitForMessage(conversationSocket, 'error')
+  conversationSocket.send(JSON.stringify({ type: 'llm-discover-models', requestId: 'conversation-discover',
+    ns: 'llm-pi-ai', provider: 'pi-ai' }))
+  assert.equal((await wrongChannelModel).code, 'wrong-channel')
   const conversationClosed = once(conversationSocket, 'close')
   conversationSocket.close()
   await conversationClosed

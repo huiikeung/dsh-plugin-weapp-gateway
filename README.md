@@ -6,6 +6,14 @@
 
 `dsh-plugin-weapp-gateway` · DeepSeek Harness 移动客户端连接插件
 
+### v0.8.37 · 模型发现与模型凭据写入
+
+- 新增三个控制连接请求，供小程序「模型 / Provider」页面在配对设备上发现自定义 Provider 的模型、查询并写入模型凭据：`llm-discover-models`（转发 Host `llm/discoverModels`，一次性 `apiKey` 只用于本次探测）、`model-credential-describe`、`model-credential-set`（转发 Host `credentials/describe|set`）。
+- `hello.capabilities` 新增 `llm-model-config-v1`；三个请求都必须来自已配对设备且带 `requestId`，未配对连接返回 `authentication-required`。
+- 凭据引用只接受当前 `llm-pi-ai` settings namespace 的 `providers[*].apiKeyEnv` 白名单（`^[A-Za-z_][A-Za-z0-9_]{0,255}$`）；凭据值必须是 1–8192 个可打印 ASCII 字符（HTTP header 可安全携带）。
+- 安全：响应帧、错误 message（截断 500 字符）与网关日志都不会出现 `apiKey` 或凭据值；Host 若在错误里回显密钥，网关先替换为 `[redacted]` 再下发。协议细节见 [PROTOCOL.md](PROTOCOL.md#模型发现与模型凭据llm-model-config-v1)。
+- 新增 `test/model-config.test.mjs`，并在 `test/host-adapter.test.mjs`、`test/auth.test.mjs` 补充适配层参数、配对鉴权与端到端断言。33 个测试文件全部通过。
+
 ### v0.8.36 · 更名为鲸尾网关助手
 
 - 设置入口、管理面板标题及中文插件元数据统一更名为「鲸尾网关助手」；同步更新导航图标和设置页渲染测试、README 与 FnOS 使用指南。协议标识和「移动网关」功能描述保持不变。
@@ -185,7 +193,7 @@ DeepSeek Harness 的设备鉴权移动连接插件，支持会话与实时事件
 
 ## 协议与 DSH 兼容层
 
-移动端连接的是本项目维护的 `dsh-mobile-v1`，不是 DSH 的内部 Remote 协议。当前 Host Adapter 基线为 DSH 0.2.1-rc.2 / Session format 4；Session、Workspace、Settings、Commands、Goals、Schedule、Permission Presets 与新增上传/子会话路由的 Remote 参数只存在于适配层。旧 Host 不满足本版硬依赖时不能加载此版插件；移动端新增功能仍需按 `hello.capabilities` 判定是否启用。Plugin Manager 系列请求帧经配对设备连接管理插件目录、安装、启停、设置与版本豁免，方案见 [DSH 0.2.0 插件管理对接方案](docs/dsh-0.2.0-rc.2-plugin-management-mobile-integration.md)。
+移动端连接的是本项目维护的 `dsh-mobile-v1`，不是 DSH 的内部 Remote 协议。当前 Host Adapter 基线为 DSH 0.2.1-rc.2 / Session format 4；Session、Workspace、Settings、Commands、Goals、Schedule、Permission Presets 与新增上传/子会话路由的 Remote 参数只存在于适配层。旧 Host 不满足本版硬依赖时不能加载此版插件；移动端新增功能仍需按 `hello.capabilities` 判定是否启用。Plugin Manager 系列请求帧经配对设备连接管理插件目录、安装、启停、设置与版本豁免，方案见 [DSH 0.2.0 插件管理对接方案](docs/dsh-0.2.0-rc.2-plugin-management-mobile-integration.md)。模型配置请求（`llm-discover-models`、`model-credential-describe`、`model-credential-set`）同样走配对设备控制连接，转发 Host `llm/discoverModels` 与 `credentials/describe|set`；凭据值只上行，响应与日志都不回显，见 [PROTOCOL.md 第 8 节](PROTOCOL.md#模型发现与模型凭据llm-model-config-v1)。
 
 配对鉴权和 `dsh-mobile-v1` / `hello.protocol = 3` 保持不变。新版实时 token 不占用持久事件的 `seq`：客户端显式订阅 `assistantStream: true`，接收原子的 `session-snapshot` 和独立增量；普通 `event` 只携带持久事件。未接入新订阅的客户端只能收到持久消息。
 

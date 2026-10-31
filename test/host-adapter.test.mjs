@@ -38,6 +38,7 @@ const gateway = {
       options: [{ value: 'ask', name: 'Ask' }], defaultOptions: [{ value: 'ask', name: 'Ask' }], defaultPreset: 'ask',
     }
     if (call.namespace === 'llm' && call.method === 'listConfigurableProviders') return [{ provider: 'deepseek', displayName: 'DeepSeek', settingsNs: 'deepseek', settingsPath: [] }]
+    if (call.namespace === 'llm' && call.method === 'discoverModels') return [{ id: 'draft-chat', name: 'Draft Chat' }]
     if (call.namespace === 'goals' && call.method === 'edit') return { id: 'goal-1', revision: 2 }
     if (call.namespace === 'goals' && call.method === 'clear') return { id: 'goal-1', revision: 3 }
     if (call.namespace === 'commands' && call.method === 'list') return []
@@ -192,6 +193,19 @@ assert.deepEqual(await host.workspace.list(), { items: [{ workspaceId: 'w1' }], 
 assert.deepEqual(await host.llm.providers(), {
   providers: [{ provider: 'deepseek', displayName: 'DeepSeek', settingsNs: 'deepseek', settingsPath: [] }],
 })
+
+// Model discovery is one direct Remote call carrying the settings namespace and
+// the draft request; the Host performs the interrogation and its result crosses
+// back unfiltered (sanitisation belongs to the gateway handler).
+{
+  const signal = new AbortController().signal
+  const request = { provider: 'pi-ai', baseURL: 'https://api.example.com/v1', api: 'openai', apiKey: 'sk-draft-only' }
+  assert.deepEqual(await host.llm.discoverModels('llm-pi-ai', request, signal), [{ id: 'draft-chat', name: 'Draft Chat' }])
+  const discoveryCall = calls.filter((call) => call.namespace === 'llm' && call.method === 'discoverModels').at(-1)
+  assert.deepEqual(discoveryCall.args, { settingsNs: 'llm-pi-ai', request })
+  assert.equal(discoveryCall.signal, signal)
+  assert.equal(discoveryCall.peer.principal.kind, 'owner')
+}
 
 assert.equal('clawbot' in host, false, 'ClawBot runs in the gateway and must not delegate control to another plugin')
 

@@ -972,6 +972,51 @@ WebUI 中的“任务”与“进行中的目标”分别对应 DSH 的 `todos` 
 → { "kind": "select-model", "selected": { "provider": "deepseek", "model": "deepseek-chat", "reasoningEffort": "high" } }
 ```
 
+### 模型发现与模型凭据（llm-model-config-v1）
+
+`hello.capabilities` 包含 `llm-model-config-v1` 时，配对设备可以通过控制连接管理自定义 Provider：探测端点上的模型、查询并写入模型凭据。三个请求都必须来自已配对设备（否则返回 `authentication-required`），走 control 连接（conversation 连接上的同名请求返回 `wrong-channel`，legacy 单连接兼容），且必须带非空 `requestId`（响应回显；缺失返回 `bad-request`）。`apiKey` 与凭据值只允许出现在请求帧里，**响应、错误 message 与网关日志都不会回显它们**。
+
+| type | 参数 | 说明 |
+|---|---|---|
+| `llm-discover-models` | `requestId`, `ns`, `provider?`, `baseURL?`, `api?`, `apiKey?` | 转发 Host `llm/discoverModels(settingsNs, request)`：`ns` 定位 settings namespace；`provider` / `baseURL` 至少一个；`apiKey` 只用于本次探测，Host 不存储 |
+| `model-credential-describe` | `requestId`, `ref` | 转发 Host `credentials/describe`，返回 `configured` / `writable`（以及可选 `source`），**没有值** |
+| `model-credential-set` | `requestId`, `ref`, `value` | 转发 Host `credentials/set`；值只上行，没有读路径 |
+
+字段约束：
+
+- `ns`：非空字符串，≤200；
+- `provider`：非空字符串，≤200（provider 路由名）；
+- `baseURL`：≤2048，且必须是绝对的 HTTP(S) URL；
+- `api`：非空字符串，≤80；
+- `apiKey`：≤8192，不得含控制字符；空串视为没有携带；
+- `ref`：必须匹配 `^[A-Za-z_][A-Za-z0-9_]{0,255}$`，并且必须出现在当前 `llm-pi-ai` settings namespace 的 `providers[*].apiKeyEnv` 里，否则 `bad-request`；
+- `value`：非空、≤8192，每个字符都在 `\x21-\x7E`（可打印 ASCII，因此不接受空格、中文和换行）。
+
+```json
+{ "type": "llm-discover-models", "requestId": "discover-1", "ns": "llm-pi-ai", "provider": "pi-ai" }
+→ { "kind": "llm-discover-models", "requestId": "discover-1",
+    "models": [ { "id": "pi-ai/chat", "name": "Pi Chat", "contextWindow": 128000,
+                  "maxTokens": 16384, "inputModalities": ["text", "image"] } ] }
+```
+
+模型数组逐项只保留 `id`、`name?`、`contextWindow?`、`maxTokens?`、`inputModalities?` 白名单字段（`inputModalities` 只认 `text` / `image`），丢弃非法与重复的 `id`；第三方 adapter 的附加字段不会下发。
+
+```json
+{ "type": "model-credential-describe", "requestId": "cred-1", "ref": "PI_AI_API_KEY" }
+→ { "kind": "model-credential-describe", "requestId": "cred-1", "configured": true, "writable": true, "source": "credentials-file" }
+
+{ "type": "model-credential-set", "requestId": "cred-2", "ref": "PI_AI_API_KEY", "value": "sk-..." }
+→ { "kind": "model-credential-set", "requestId": "cred-2", "saved": true }
+```
+
+失败帧保留 `requestType` 与 `requestId`，`message` 截断到 500 字符：
+
+- 探测失败：`{ "kind":"error", "code":"llm-discovery-failed", "message":"..." }`；
+- 凭据写入失败：`{ "kind":"error", "code":"model-credential-write-failed", "message":"..." }`；
+- 凭据描述失败：Host 错误码原样透传（例如 `{ "kind":"error", "code":"credentials/unavailable" }`）；settings 不可读时为 `model-credentials-unavailable`。
+
+如果 Host 的错误信息里包含本次请求的 `apiKey` 或凭据值，网关会先替换为 `[redacted]` 再下发并写日志。
+
 ---
 
 ## 9. 权限控制

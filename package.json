@@ -1,6 +1,6 @@
 {
   "name": "dsh-plugin-weapp-gateway",
-  "version": "0.8.36",
+  "version": "0.8.37",
   "description": "鲸尾网关助手：DeepSeek Harness 移动客户端连接与会话同步，支持安全配对、远程访问、上下文、编队、额度和语音输入",
   "main": "lib/index.mjs",
   "files": [
@@ -29,7 +29,7 @@
   },
   "bin": "bin/setup-ip.mjs",
   "scripts": {
-    "test": "node test/wire-json.test.mjs && node --test test/history-cache.test.mjs && node test/session-target.test.mjs && node test/setup-ip.test.mjs && node test/host-adapter.test.mjs && node test/file-upload-adapter.test.mjs && node test/file-upload.test.mjs && node test/agent-team.test.mjs && node test/account-bridge.test.mjs && node test/context-bridge.test.mjs && node test/cost-meter.test.mjs && node --test test/cost-meter-dashboard.test.mjs && node test/clawbot-service.test.mjs && node test/speech-input.test.mjs && node test/speech-official.test.mjs && node test/plugin-management.test.mjs && node test/plugin-updates.test.mjs && node test/session-preset.test.mjs && node test/session-follower.test.mjs && node test/completion-notifications.test.mjs && node --test test/workspace-changes.test.mjs && node test/gateway.test.mjs && node test/auth.test.mjs && node test/lan.test.mjs && node test/cloudflared-binary.test.mjs && node test/cloudflare-tunnel.test.mjs && node --test test/public-endpoint-check.test.mjs && node test/gateway-tools.test.mjs && node test/relay-connector.test.mjs && node test/restart-reconnect.test.mjs && node test/cloudflare-linux.test.mjs && node test/multi-gateway.test.mjs"
+    "test": "node test/wire-json.test.mjs && node --test test/history-cache.test.mjs && node test/session-target.test.mjs && node test/setup-ip.test.mjs && node test/host-adapter.test.mjs && node test/file-upload-adapter.test.mjs && node test/file-upload.test.mjs && node test/agent-team.test.mjs && node test/account-bridge.test.mjs && node test/context-bridge.test.mjs && node test/cost-meter.test.mjs && node --test test/cost-meter-dashboard.test.mjs && node test/clawbot-service.test.mjs && node test/speech-input.test.mjs && node test/speech-official.test.mjs && node test/plugin-management.test.mjs && node test/model-config.test.mjs && node test/plugin-updates.test.mjs && node test/session-preset.test.mjs && node test/session-follower.test.mjs && node test/completion-notifications.test.mjs && node --test test/workspace-changes.test.mjs && node test/gateway.test.mjs && node test/auth.test.mjs && node test/lan.test.mjs && node test/cloudflared-binary.test.mjs && node test/cloudflare-tunnel.test.mjs && node --test test/public-endpoint-check.test.mjs && node test/gateway-tools.test.mjs && node test/relay-connector.test.mjs && node test/restart-reconnect.test.mjs && node test/cloudflare-linux.test.mjs && node test/multi-gateway.test.mjs"
   },
   "exports": {
     ".": "./lib/index.mjs",
