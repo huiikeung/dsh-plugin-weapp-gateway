@@ -192,11 +192,24 @@ class AgentSession {
   }
 
   open(packet) {
-    if (!this.ready || !packet || packet.length < 9 + 17 || packet[0] !== PACKET_SEALED) return null;
+    this.lastOpenFailure = null;
+    if (!this.ready) { this.lastOpenFailure = 'not-ready'; return null; }
+    if (!packet || packet.length < 9 + 17 || packet[0] !== PACKET_SEALED) {
+      this.lastOpenFailure = 'format';
+      return null;
+    }
     const counter = readCounter(packet, 1);
-    if (counter < this.rxCounter) return null;
+    // 重复帧（这条管道已经处理过该 counter）不是密钥错误：排队/回放/重连边界
+    // 上都可能发生。丢弃即可，绝不能因此关闭整条管道。
+    if (counter < this.rxCounter) {
+      this.lastOpenFailure = 'duplicate';
+      return null;
+    }
     const clear = nacl.secretbox.open(packet.subarray(9), concat(this.rxPrefix, counterBytes(counter)), this.key);
-    if (!clear || clear.length < 1 || clear[0] !== CLEAR_DATA) return null;
+    if (!clear || clear.length < 1 || clear[0] !== CLEAR_DATA) {
+      this.lastOpenFailure = 'decrypt';
+      return null;
+    }
     this.rxCounter = counter + 1;
     return utf8Decode(clear.subarray(1));
   }
@@ -395,7 +408,7 @@ async function handleClientOpen(frame, agentWs) {
   });
 
   gateway.on('close', (code, reason) => {
-    log(`管道 ${bridgeId}: 本地网关关闭 ${code} ${reason.toString()}`);
+    log(`管道 ${bridgeId}: 本地网关关闭 ${code} ${reason ? reason.toString() : ''}`.trimEnd());
     pipes.delete(bridgeId);
     if (agentWs.readyState === WebSocket.OPEN) {
       agentWs.send(JSON.stringify({ kind: 'client-close', bridgeId }), { binary: false });
@@ -471,8 +484,10 @@ function authenticateGateway(pipe, bridgeId, frame) {
     }
     sendPipeFrame(pipe.agentWs, bridgeId, pipe.session.seal(text));
   });
-  gateway.on('close', () => {
+  gateway.on('close', (code, reason) => {
     clearTimeout(pipe.authTimer); pipes.delete(bridgeId);
+    rejectedFrameLog.delete(bridgeId);
+    log(`管道 ${bridgeId}: 本地网关关闭 ${code} ${reason ? reason.toString() : ''}`.trimEnd());
     if (pipe.agentWs.readyState === WebSocket.OPEN) pipe.agentWs.send(JSON.stringify({ kind: 'client-close', bridgeId }));
   });
   gateway.on('error', () => {
@@ -502,7 +517,14 @@ function handleRelayBinary(data) {
   if (pipe.session.ready && packet[0] === PACKET_SEALED) {
     const text = pipe.session.open(packet);
     if (text === null) {
-      log(`管道 ${bridgeId}: 密文解密失败，关闭管道`);
+      const reason = pipe.session.lastOpenFailure;
+      // 重复帧/残帧只丢弃，不关管道：把它们当“解密失败”会把一条健康连接直接
+      // 掐断，手机侧看到 4001 gateway-closed，表现就是打开会话/切页面就掉线。
+      if (reason === 'duplicate' || reason === 'format' || reason === 'not-ready') {
+        logRejectedFrame(bridgeId, reason, packet.length);
+        return;
+      }
+      log(`管道 ${bridgeId}: 密文解密失败，关闭管道（${reason || 'unknown'}）`);
       try { pipe.gateway.close(4002, 'e2ee-decrypt-failed'); } catch (error) { /* ignore */ }
       pipes.delete(bridgeId);
       return;
@@ -574,6 +596,21 @@ function printPairingPayload(offer) {
 
 function log(message) {
   console.log(`[connector ${new Date().toISOString()}] ${message}`);
+}
+
+// 重复/残帧可能成串出现（例如重连后旧会话的残留帧），按管道限流汇总，
+// 避免日志刷屏同时保留“确实在丢帧”的可见性。
+const rejectedFrameLog = new Map();
+function logRejectedFrame(bridgeId, reason, length) {
+  const now = Date.now();
+  const entry = rejectedFrameLog.get(bridgeId) || { at: now, count: 0 };
+  entry.count += 1;
+  if (now - entry.at >= 2000) {
+    log(`管道 ${bridgeId}: 丢弃 ${entry.count} 个重复/残帧（${reason}，len=${length}）`);
+    rejectedFrameLog.set(bridgeId, { at: now, count: 0 });
+    return;
+  }
+  rejectedFrameLog.set(bridgeId, entry);
 }
 
 // ---------- 主流程 ----------
