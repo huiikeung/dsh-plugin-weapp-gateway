@@ -729,6 +729,24 @@ function expectRejected(url, options = {}) {
   assert.deepEqual(relayAutoPayload.routes.lan, ['ws://192.168.1.20:3081/ws/mobile'])
   assert.equal(relayAutoPayload.routes.relay.nodeId, 'ecb2de50-7542-490b-af4f-aebfcb29c3c2',
     'auto pairing still advertises the relay so the phone can connect off-LAN')
+
+  // route=mini：小程序专用路线——中继优先、局域网兜底（v2 直连载荷 + relay 路由表，
+  // 不生成 miniProgramRoute，避免小程序把载荷当作中继专用 v3 码而失去局域网兜底）。
+  const miniPair = await fetch(`${base}/mgw/pair`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Origin: base },
+    body: JSON.stringify({ route: 'mini', lanUrl: 'ws://192.168.1.20:3081/ws/mobile' }),
+  })
+  assert.equal(miniPair.status, 201)
+  const miniPayload = (await miniPair.json()).payload
+  assert.equal(miniPayload.version, 2)
+  assert.equal(miniPayload.publicUrl, 'ws://192.168.1.20:3081/ws/mobile')
+  assert.equal('miniProgramRoute' in miniPayload, false, 'the mini route keeps the relay in the route table instead of a relay-only payload')
+  assert.deepEqual(miniPayload.routes.public, [], 'the mini route never advertises a public family')
+  assert.deepEqual(miniPayload.routes.lan, ['ws://192.168.1.20:3081/ws/mobile'],
+    'the mini route keeps LAN endpoints as the fallback family')
+  assert.equal(miniPayload.routes.relay.relay, 'wss://relay.example.com')
+  assert.equal(miniPayload.routes.relay.authMode, 'gateway')
   fs.writeFileSync(publicUrlFile, configuredPublicUrlText)
 
   const unsafeAppEndpoint = await fetch(`${base}/mgw/pair`, {

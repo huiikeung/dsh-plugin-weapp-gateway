@@ -176,8 +176,7 @@ const seeds = [
   },
   null,                                                                                      // dismissedNotice
   'ws://192.168.3.110:3081/ws/mobile',                                                       // publicUrl
-  'auto',                                                                                    // miniPlan
-  'lan',                                                                                     // appRoute
+  'auto',                                                                                    // appRoute
   false,                                                                                     // connectionHelpOpen
   false,                                                                                     // toolsOpen
   false,                                                                                     // toolBusy
@@ -231,7 +230,8 @@ for (const [needle, what] of [
   ['已刷新 · 10:00:00', 'refresh notice'],
   ['v0.8.5', 'version footer'],
   ['aria-label="关闭"', 'close button'],
-  ['自动选择', 'automatic client-aware route offered'],
+  ['鲸尾公网 · 小程序', 'mini-program relay scheme offered'],
+  ['中继优先，局域网兜底', 'mini-program scheme states relay-first with LAN fallback'],
   ['鲸尾公网 · 小程序', 'the standalone mini-program relay route remains available'],
   ['aria-checked="true"', 'auth switch is on'],
   ['设备 ID ecb2de50…', 'registered relay identity shown (abbreviated)'],
@@ -274,9 +274,9 @@ for (const [needle, what] of [
   ['aria-checked="true"', 'a mode is selected'],
   ['公网接入', 'direct-mode public-access label is plain (no relay caveat)'],
   ['ws://192.168.3.110:3081/ws/mobile', 'gateway address shown'],
-  ['自动选择', 'auto option remains the default plan'],
+  ['鲸尾公网 · 小程序', 'mini-program module keeps the relay scheme'],
   ['DSH App 和小程序都可通过公网或局域网连接', 'both clients can use public and LAN routes'],
-  ['自动选择', 'auto route option offered'],
+  ['中继优先，局域网兜底', 'relay-first and LAN fallback stated'],
 ]) check(htmlC.includes(needle), what)
 check(src.includes("'鲸尾公网 · 小程序'"), 'the standalone relay option stays available in the plan list')
 check(htmlC.includes('配对入口地址（手机需能访问）'), 'the unified address field is rendered in automatic mode')
@@ -464,7 +464,7 @@ check(src.includes('function apiPath') && src.includes('document.baseURI')
   && src.includes('fetch(apiPath(path)'), 'management RPC resolves against the document base (gateway prefix safe)')
 check(src.includes("'/mgw/cloudflare'") && src.includes('/mgw/tools/') && src.includes('pairingUrlFor'),
   'cloudflare tunnel, web tools and pairing routes wired')
-check(src.includes("'Cloudflare 外网'") && src.includes("'公网或其他手动地址'") && src.includes("'鲸尾公网 · 小程序'") && src.includes("'小程序连接（推荐）'") && src.includes("'兼容 App（备用）'") && !src.includes('建设中'),
+check(src.includes("'Cloudflare 外网'") && src.includes("'公网或其他手动地址'") && src.includes("'鲸尾公网 · 小程序'") && src.includes("'小程序连接（推荐）'") && src.includes("'兼容 App（备用）'") && src.includes("route: 'mini'") && !src.includes('建设中'),
   'custom Select offers cloudflare modes and the custom route')
 check(src.includes('function GatewaySelect') && src.includes("addEventListener('pointerdown', outside)")
   && src.includes("if (event.key === 'Escape')"),
