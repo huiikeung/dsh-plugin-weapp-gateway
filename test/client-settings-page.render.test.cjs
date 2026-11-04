@@ -148,7 +148,7 @@ for (const [needle, what] of [
 ]) check(htmlA.includes(needle), what)
 check(!htmlA.includes('安装应用'), 'install guide section is gone (not needed for now)')
 check(!htmlA.includes('正在检查系统组件…'), 'public access stays hidden while status is loading')
-check(!htmlA.includes('DSH App / 小程序连接地址'), 'custom address field is hidden until the custom route is selected')
+check(htmlA.includes('配对入口地址（手机需能访问）'), 'the unified pairing address field is rendered')
 
 // ---------------------------------------------------------- render B: populated
 console.log('\n=== render B: populated state ===')
@@ -235,8 +235,7 @@ for (const [needle, what] of [
   ['aria-checked="true"', 'auth switch is on'],
   ['设备 ID ecb2de50…', 'registered relay identity shown (abbreviated)'],
   ['鲸尾公网服务 · 已注册', 'relay registration hint'],
-  ['自动选择会优先使用已就绪的 Cloudflare 或公网服务器入口', 'auto route prefers a ready public endpoint before the registered relay'],
-  ['也可单独选择“鲸尾公网 · 小程序”', 'the separate mini-program relay pairing option remains available'],
+  ['公网 WSS 就绪时，DSH App 和小程序都会尝试公网、局域网与 Tailscale 地址', 'auto route explains the candidate fallback order'],
   ['公网接入', 'public access label is independent of pairing mode'],
   ['若安装或更新后连接异常，请重启应用', 'restart notice shown for the current gateway instance'],
   ['展开其他已配对设备（1）', 'offline devices collapse behind a toggle'],
@@ -266,16 +265,16 @@ directRegistrations.length = 0
 directExported.apply({ slots: { inject: (n, t) => t(), register: (o, c) => { directRegistrations.push({ options: o, component: c }); return () => {} } } })
 const htmlC = renderToStaticMarkup(React.createElement(directExported.DevicePanel, { close: () => {} }))
 for (const [needle, what] of [
-  ['配对连接方式', 'route selector present in direct mode'],
+  ['连接方案', 'connection-plan selector present in direct mode'],
   ['aria-checked="true"', 'a mode is selected'],
   ['公网接入', 'direct-mode public-access label is plain (no relay caveat)'],
   ['ws://192.168.3.110:3081/ws/mobile', 'gateway address shown'],
-  ['配对连接方式', 'route selector rendered in direct mode'],
+  ['自动选择', 'auto option remains the default plan'],
   ['DSH App 和小程序都可通过公网或局域网连接', 'both clients can use public and LAN routes'],
   ['自动选择', 'auto route option offered'],
 ]) check(htmlC.includes(needle), what)
-check(htmlC.includes('鲸尾公网 · 尚未注册'), 'the standalone relay route stays visible but unavailable until registration')
-check(!htmlC.includes('DSH App / 小程序连接地址'), 'custom address field stays hidden in automatic mode')
+check(!htmlC.includes('鲸尾公网 · 小程序'), 'the standalone relay option is consolidated into auto selection')
+check(htmlC.includes('配对入口地址（手机需能访问）'), 'the unified address field is rendered in automatic mode')
 check(!htmlC.includes('中继模式：二维码指向上面的中继地址'), 'direct mode does not show the relay route note')
 // negative checks: the relay details must not leak into direct mode
 for (const needle of ['wss://relay.ahwe.top', 'nodeId ecb2de50', 'agentPubKey nU2yVdMWY2']) {
@@ -458,7 +457,7 @@ check(src.includes('function apiPath') && src.includes('document.baseURI')
   && src.includes('fetch(apiPath(path)'), 'management RPC resolves against the document base (gateway prefix safe)')
 check(src.includes("'/mgw/cloudflare'") && src.includes('/mgw/tools/') && src.includes('pairingUrlFor'),
   'cloudflare tunnel, web tools and pairing routes wired')
-check(src.includes("'Quick Tunnel · 无需域名'") && src.includes("'命名 Tunnel · 固定域名'") && src.includes("'手动输入地址'"),
+check(src.includes("'Quick Channel（Quick Tunnel）'") && src.includes("'Cloudflare 外网'") && src.includes("'公网或其他手动地址'"),
   'custom Select offers cloudflare modes and the custom route')
 check(src.includes('function GatewaySelect') && src.includes("addEventListener('pointerdown', outside)")
   && src.includes("if (event.key === 'Escape')"),
