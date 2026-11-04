@@ -235,7 +235,8 @@ for (const [needle, what] of [
   ['aria-checked="true"', 'auth switch is on'],
   ['设备 ID ecb2de50…', 'registered relay identity shown (abbreviated)'],
   ['鲸尾公网服务 · 已注册', 'relay registration hint'],
-  ['公网 WSS 就绪时，DSH App 和小程序都会尝试公网、局域网与 Tailscale 地址', 'auto route explains the candidate fallback order'],
+  ['鲸尾公网 · 小程序', 'the standalone mini-program relay route is restored'],
+  ['也可单独选择「鲸尾公网 · 小程序」', 'the relay registration hint points at the standalone relay route'],
   ['公网接入', 'public access label is independent of pairing mode'],
   ['若安装或更新后连接异常，请重启应用', 'restart notice shown for the current gateway instance'],
   ['展开其他已配对设备（1）', 'offline devices collapse behind a toggle'],
@@ -273,7 +274,7 @@ for (const [needle, what] of [
   ['DSH App 和小程序都可通过公网或局域网连接', 'both clients can use public and LAN routes'],
   ['自动选择', 'auto route option offered'],
 ]) check(htmlC.includes(needle), what)
-check(!htmlC.includes('鲸尾公网 · 小程序'), 'the standalone relay option is consolidated into auto selection')
+check(src.includes("'鲸尾公网 · 小程序'"), 'the standalone relay option stays available in the plan list')
 check(htmlC.includes('配对入口地址（手机需能访问）'), 'the unified address field is rendered in automatic mode')
 check(!htmlC.includes('中继模式：二维码指向上面的中继地址'), 'direct mode does not show the relay route note')
 // negative checks: the relay details must not leak into direct mode
@@ -457,7 +458,7 @@ check(src.includes('function apiPath') && src.includes('document.baseURI')
   && src.includes('fetch(apiPath(path)'), 'management RPC resolves against the document base (gateway prefix safe)')
 check(src.includes("'/mgw/cloudflare'") && src.includes('/mgw/tools/') && src.includes('pairingUrlFor'),
   'cloudflare tunnel, web tools and pairing routes wired')
-check(src.includes("'Quick Channel（Quick Tunnel）'") && src.includes("'Cloudflare 外网'") && src.includes("'公网或其他手动地址'"),
+check(src.includes("'Quick Channel（Quick Tunnel）'") && src.includes("'Cloudflare 外网'") && src.includes("'公网或其他手动地址'") && src.includes("'鲸尾公网 · 小程序'") && !src.includes('建设中'),
   'custom Select offers cloudflare modes and the custom route')
 check(src.includes('function GatewaySelect') && src.includes("addEventListener('pointerdown', outside)")
   && src.includes("if (event.key === 'Escape')"),
