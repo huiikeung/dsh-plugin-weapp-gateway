@@ -136,9 +136,10 @@ v0.7.9 起（本 fork）fnOS 上也可以直接用面板的「Cloudflare Tunnel�
 Quick / 命名 Tunnel。它走插件自己的 `127.0.0.1:3082` 专用入口（只放行 `/ws/mobile`），
 与上表三种转发到 `3081` 的做法不同，可按需二选一。
 
-⚠️ 唯一注意：**Tailscale 直连 `http://100.x.x.x:3081` 会被插件 403**，
-因为 `isPrivateNetworkHostname()` 的白名单只有 `10/8、172.16/12、192.168/16、169.254/16、localhost、.local、fc00::/7`，
-**不含 `100.64.0.0/10`（CGNAT）**。必须用 `tailscale serve`（从回环发起）。
+Tailscale 直连已支持（v0.8.40 起）：局域网监听对 `100.64.0.0/10`（Tailscale IPv4）
+与 `fd7a:115c:a1e0::/48`（Tailscale IPv6）来源放行，同一 Tailnet 的手机可直接使用
+`ws://100.x.x.x:3081/ws/mobile` 配对，无需 `tailscale serve`。需要 HTTPS 或浏览器访问时
+仍可再用 `tailscale serve --bg 3081`（从回环发起）。
 
 ### 写入外网地址
 

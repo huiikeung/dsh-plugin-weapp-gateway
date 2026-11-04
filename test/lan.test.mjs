@@ -135,6 +135,10 @@ async function waitForLanStatus(base) {
   assert.equal(status.lan.error, null)
   assert.equal(status.lan.urls.length, 1)
   assert.deepEqual(status.tools, { restartWeb: false, stopWeb: false })
+  // Tailscale 地址由本机接口探测，只保证字段形状；本机没有 Tailscale 时为空数组。
+  assert.deepEqual(Object.keys(status.tailscale).sort(), ['addresses', 'urls'])
+  assert.ok(Array.isArray(status.tailscale.addresses) && Array.isArray(status.tailscale.urls))
+  assert.ok(status.tailscale.urls.every((url) => url.startsWith('ws://') && url.endsWith('/ws/mobile')))
   for (const action of ['restart-web', 'stop-web']) {
     const unavailable = await fetch(`${base}/mgw/tools/${action}`, {
       method: 'POST', headers: { Origin: base },

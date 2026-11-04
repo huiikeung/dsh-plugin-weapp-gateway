@@ -338,6 +338,16 @@ function expectRejected(url, options = {}) {
   })
   assert.equal(insecurePublic.status, 400)
 
+  // Tailscale 的 100.64.0.0/10 与局域网同等对待：允许 ws:// 直连地址参与配对，
+  // 同一 tailnet 的手机无需 tailscale serve 即可直接连局域网监听。
+  const tailscalePair = await fetch(`${base}/mgw/pair`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Origin: base },
+    body: JSON.stringify({ name: 'Tailscale Phone', publicUrl: 'ws://100.101.102.103:3081/ws/mobile' }),
+  })
+  assert.equal(tailscalePair.status, 201)
+  assert.equal((await tailscalePair.json()).payload.publicUrl, 'ws://100.101.102.103:3081/ws/mobile')
+
   const pairResponse = await fetch(`${base}/mgw/pair`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Origin: base },

@@ -3,7 +3,7 @@
 移动端通过经过设备鉴权的 WebSocket 连接与 dsh 通信：订阅 Agent 实时输出、发送文字、图片和文件、查看轮次大纲及编队/子智能体会话、处理 Human-in-the-loop 提问与操作审批、查询会话/工作区/历史、调整会话配置。本插件当前基线为 DSH 0.2.1-rc.2 / Session format 4，移动端实时流接入见 [rc.2 接入说明](docs/dsh-rc2-mobile-integration.md)。插件管理（第 18 节）的 Remote namespace 需 DSH 0.2.0-rc.2 或更新宿主；最新的轮次导航、编队/子会话和文件上传扩展见本文末尾及其 [App 接入指南](docs/turn-outline-app-integration.md)、[编队接入指南](docs/agent-team-app-integration.md)、[文件上传接入指南](docs/file-upload-app-integration.md)。
 
 - **本机端点**：`ws://127.0.0.1:3080/ws/mobile`（与 dsh web GUI 同端口）
-- **局域网端点**：`ws://<电脑的私有局域网 IP>:3081/ws/mobile`（插件独立监听，只提供经过鉴权的 WebSocket）
+- **局域网端点**：`ws://<电脑的私有局域网 IP>:3081/ws/mobile`（插件独立监听，只提供经过鉴权的 WebSocket）；同一 Tailnet 的手机可直接使用 `ws://<Tailscale IP>:3081/ws/mobile`（`100.64.0.0/10` / `fd7a:115c:a1e0::/48` 与私有网络同等放行）。`GET /mgw/status` 的 `tailscale` 字段返回本机检测到的 `addresses` 与可用 `urls`，不推断手机地址，也不等于已登录 tailnet
 - **公网端点**：必须由 TLS 反向代理提供 `wss://<域名>/ws/mobile`
 - **帧格式**：全部为 JSON 文本帧（UTF-8）；图片字节及语音 WAV 使用标准 Base64
 - **连接即推送**：连上后服务端立刻发送一条 `hello`，之后 agent 输出以 `event` 帧实时推送

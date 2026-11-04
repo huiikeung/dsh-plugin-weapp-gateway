@@ -6,6 +6,12 @@
 
 `dsh-plugin-weapp-gateway` · DeepSeek Harness 移动客户端连接插件
 
+### v0.8.40 · Tailscale 直连支持
+
+- 新增 [`lib/tailscale-addresses.mjs`](lib/tailscale-addresses.mjs)：识别本机 Tailscale 地址（`100.64.0.0/10` 与 `fd7a:115c:a1e0::/48`），并在 `/mgw/status` 新增 `tailscale: { addresses, urls }`（只读本机接口，不推断手机 IP；检测到地址不等于已登录 tailnet）。
+- 局域网监听与配对地址校验对 Tailscale 来源放行：同一 tailnet 的手机可直接使用 `ws://100.x.x.x:3081/ws/mobile` 配对，无需 `tailscale serve`；`tailscale serve` 仍可用于 HTTPS/浏览器场景。
+- 「连接与配对」页展示检测到的 Tailscale 直连地址（未监听时提示先开启局域网入口）。
+- 新增 `test/tailscale-addresses.test.mjs`（地址识别、接口探测、IPv6 括号、无接口不编造），并在 `test/lan.test.mjs`、`test/auth.test.mjs` 补充状态形状与 Tailscale 配对地址断言。
 ### v0.8.39 · 同步上游移动网关新功能
 
 - **文件引用解析 `file-resolve`**（app 文件卡片预览依赖）：把工作目录相对路径或主机原生绝对路径解析成下载协议需要的相对路径与预览元数据（`file-resolved`：`path`/`name`/`mediaType`/`size`/`modifiedAt`），不再需要先遍历目录；绝对路径只在这里接受且必须落在 Session 工作目录内（含 macOS `/var` 与 `/private/var` 别名映射），越界、目录、超限分别返回 `file-not-allowed`/`file-not-regular`/`file-too-large`。属 `file-references-v1` 能力。
@@ -426,16 +432,10 @@ apt-get update && apt-get install -y cloudflared
 ### Tailscale（推荐长期使用）
 
 1. 在电脑和 iPhone 安装 [Tailscale](https://tailscale.com/download)，并登录同一个 Tailnet。
-2. 在 Windows PowerShell 或 macOS 终端执行：
+2. 插件会自动探测本机 Tailscale 接口地址（`100.64.0.0/10` 或 `fd7a:115c:a1e0::/48`）并显示在「连接与配对」页。开启局域网入口后，同一 Tailnet 的手机可以直接使用 `ws://100.x.x.x:3081/ws/mobile` 配对，无需任何转发。
+3. 需要 HTTPS / 浏览器访问时再执行 `tailscale serve --bg 3081`，用 `tailscale serve status` 查看 `https://<设备名>.<tailnet>.ts.net` 地址，把 `wss://<设备名>.<tailnet>.ts.net/ws/mobile` 填入「手动输入地址」后生成二维码。
 
-```bash
-tailscale serve --bg 3081
-```
-
-3. 执行 `tailscale serve status` 查看生成的 `https://<设备名>.<tailnet>.ts.net` 地址。
-4. 将地址改为 `wss://<设备名>.<tailnet>.ts.net/ws/mobile`，填入 WebUI 的“WebSocket 地址”，再生成二维码配对。
-
-Tailscale Serve 只允许同一 Tailnet 中符合访问规则的设备连接，并自动提供 HTTPS。可用 `tailscale serve reset` 停止转发。参见 [Tailscale Serve 文档](https://tailscale.com/docs/reference/tailscale-cli/serve)。
+局域网监听对 `100.64.0.0/10` 与 Tailscale IPv6 来源放行，鉴权规则与其他私有网络一致。Tailscale Serve 只允许同一 Tailnet 中符合访问规则的设备连接，并自动提供 HTTPS；可用 `tailscale serve reset` 停止转发。参见 [Tailscale Serve 文档](https://tailscale.com/docs/reference/tailscale-cli/serve)。
 
 ## 网关配置方式总览
 
