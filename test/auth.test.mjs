@@ -250,6 +250,28 @@ function expectRejected(url, options = {}) {
   })
   assert.equal(blockedPublicSetup.status, 403)
 
+  // 面板 UI 偏好：侧边栏入口开关（默认开启，可持久化关闭，非法值 400）。
+  assert.equal((await (await fetch(`${base}/mgw/ui`)).json()).sidebarEntry, true)
+  const uiOff = await fetch(`${base}/mgw/ui`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Origin: base },
+    body: JSON.stringify({ sidebarEntry: false }),
+  })
+  assert.equal(uiOff.status, 200)
+  assert.equal((await uiOff.json()).sidebarEntry, false)
+  assert.equal((await (await fetch(`${base}/mgw/ui`)).json()).sidebarEntry, false)
+  const uiInvalid = await fetch(`${base}/mgw/ui`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Origin: base },
+    body: JSON.stringify({ sidebarEntry: 'no' }),
+  })
+  assert.equal(uiInvalid.status, 400)
+  await fetch(`${base}/mgw/ui`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Origin: base },
+    body: JSON.stringify({ sidebarEntry: true }),
+  })
+
   assert.equal(await expectRejected(wsUrl), 503)
 
   const enableGatewayResponse = await fetch(`${base}/mgw/gateway`, {

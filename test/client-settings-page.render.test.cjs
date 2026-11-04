@@ -143,11 +143,10 @@ for (const [needle, what] of [
   ['设备鉴权', 'auth row'],
   ['可信设备', 'trusted devices group'],
   ['网络检测', 'network diagnostics nav section'],
-  ['安装应用', 'install guide nav section'],
+  ['在左侧栏显示入口', 'sidebar entry toggle card rendered'],
   ['aria-label="工具"', 'tools gear button rendered (menu opens on click)'],
 ]) check(htmlA.includes(needle), what)
-check(htmlA.includes('在手机上安装应用') && htmlA.includes('下载 Android 安装包'),
-  'install guide renders its Android steps by default in a non-iOS environment')
+check(!htmlA.includes('安装应用'), 'install guide section is gone (not needed for now)')
 check(!htmlA.includes('正在检查系统组件…'), 'public access stays hidden while status is loading')
 check(!htmlA.includes('DSH App / 小程序连接地址'), 'custom address field is hidden until the custom route is selected')
 
@@ -448,8 +447,12 @@ check((src.match(/position: 'fixed'/g) || []).length === 2,
   'fixed positioning is limited to the two dialogs (backdrop + pairing)')
 check(src.includes('mgw-pairing-dialog') && src.includes('prefers-reduced-motion'),
   'the pairing dialog is animated and reduced-motion aware')
-check(src.includes("['network', '网络检测']") && src.includes("['install', '安装应用']"),
-  'panel offers the upstream network and install sections')
+check(src.includes("['network', '网络检测']") && !src.includes("['install', '安装应用']"),
+  'panel offers the network section and no install section')
+check(src.includes("value: 'tailscale'") && src.includes('主机 Tailscale 地址'),
+  'pairing offers the Tailscale route with a manual host-address input')
+check(src.includes("'/mgw/ui'") && src.includes('在左侧栏显示入口'),
+  'the sidebar entry can be toggled from the plugin page')
 check(src.includes("id: 'mobile-gateway'"), 'registers the mobile-gateway settings section')
 check(src.includes('function apiPath') && src.includes('document.baseURI')
   && src.includes('fetch(apiPath(path)'), 'management RPC resolves against the document base (gateway prefix safe)')
