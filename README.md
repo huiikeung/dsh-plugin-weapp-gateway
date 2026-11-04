@@ -6,6 +6,14 @@
 
 `dsh-plugin-weapp-gateway` · DeepSeek Harness 移动客户端连接插件
 
+### v0.8.39 · 同步上游移动网关新功能
+
+- **文件引用解析 `file-resolve`**（app 文件卡片预览依赖）：把工作目录相对路径或主机原生绝对路径解析成下载协议需要的相对路径与预览元数据（`file-resolved`：`path`/`name`/`mediaType`/`size`/`modifiedAt`），不再需要先遍历目录；绝对路径只在这里接受且必须落在 Session 工作目录内（含 macOS `/var` 与 `/private/var` 别名映射），越界、目录、超限分别返回 `file-not-allowed`/`file-not-regular`/`file-too-large`。属 `file-references-v1` 能力。
+- **服务端网络检测 `network-diagnostics-v1`**：管理接口 `POST /mgw/network-test` 向每条已鉴权移动连接发 WebSocket Ping/Pong，按设备与通道返回协议 RTT、最近一分钟样本、平均值与 P95；面板「通用设置」新增「服务端网络检测」卡片（页面可见时每两秒刷新）。仅本机回环管理接口，移动端没有新增帧。
+- **浏览器设备元数据子协议**：无法设置自定义握手头的浏览器客户端可用 `dsh-device.<id>` 传设备 ID、`dsh-device-name.<base64url>` 传设备名；设备 ID 仍不是凭证，配对码与长期 token 要求不变。
+- **问题/审批重放对齐上游**：网关开启时登记所有待答提问与审批（不再要求当前已有匹配移动连接），设备首次连接或之后打开对应会话时以 `replay: true` 补发；实时广播仍按订阅 Session 过滤，登记时没有移动客户端则立刻回退给 WebUI，不挂住工具调用。
+- **事件详情对齐上游**：`assistant/message`/`assistant/attempt` 增加 `finish`（结束原因与失败摘要），`tool/result` 增加 `output`（≤16KB 首尾摘要）与 `outputTruncated`，新增 `llm/retry`/`llm/retry-started` 实时帧，`turn/*` 增加增量字段 `reasonDetails`；`reason` 保持既有形态，小程序兼容路径不变。
+- 新增 `test/question-replay.test.mjs`、`test/network-diagnostics.test.mjs`，并在 `test/gateway.test.mjs`（`file-resolve` 与事件详情）与 `test/auth.test.mjs`（子协议配对、网络诊断接口、能力列表）补充回归；35 个测试文件全部通过。小程序配对、选路与中继路径未改动。
 ### v0.8.37 · 模型发现与模型凭据写入
 
 - 新增三个控制连接请求，供小程序「模型 / Provider」页面在配对设备上发现自定义 Provider 的模型、查询并写入模型凭据：`llm-discover-models`（转发 Host `llm/discoverModels`，一次性 `apiKey` 只用于本次探测）、`model-credential-describe`、`model-credential-set`（转发 Host `credentials/describe|set`）。

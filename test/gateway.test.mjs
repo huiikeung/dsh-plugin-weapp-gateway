@@ -511,7 +511,27 @@ function waitFor(pred, timeout) { return new Promise((res) => { const t0 = Date.
   assert.equal(got.find(frame => frame.seq === 9000).event.isError, true)
   assert.equal(got.find(frame => frame.seq === 9000).event.preview, 'failed')
   assert.equal(got.find(frame => frame.seq === 9000).event.error.reason, 'permission denied')
+  // 工具输出摘要（上游 session-event-details）：16KB 首尾保留 + 截断标记。
+  assert.equal(got.find(frame => frame.seq === 9000).event.output, 'failed')
+  assert.equal(got.find(frame => frame.seq === 9000).event.outputTruncated, false)
   assert.equal(got.find(frame => frame.seq === 9001).event.stream[0].type, 'chunk')
+  assert.deepEqual(got.find(frame => frame.seq === 9001).event.finish, { kind: 'error' })
+
+  listeners['session/event']({ id: 's1' }, { type: 'tool/result', seq: 9002, time: 3, data: {
+    turn: 1, step: 0, message: { role: 'tool', toolCallId: 'big-call', content: [{ type: 'text', text: 'x'.repeat(20000) }] },
+  } })
+  listeners['session/event']({ id: 's1' }, { type: 'llm/retry', seq: 9003, time: 4, data: {
+    turn: 1, step: 0, retryId: 'retry-1', retry: 1, provider: 'deepseek', mode: 'retry', maxRetries: 3, delayMs: 500,
+    failure: { message: 'rate limited', code: 'RATE_LIMIT', status: 429 },
+  } })
+  assert.equal(await waitFor(() => got.some(frame => frame.seq === 9003), 2000), true)
+  const bigToolEvent = got.find(frame => frame.seq === 9002).event
+  assert.equal(bigToolEvent.outputTruncated, true)
+  assert.ok(bigToolEvent.output.length < 20000 && bigToolEvent.output.includes('[…]'))
+  const retryEvent = got.find(frame => frame.seq === 9003).event
+  assert.equal(retryEvent.retryId, 'retry-1')
+  assert.equal(retryEvent.failure.code, 'RATE_LIMIT')
+  assert.equal(retryEvent.failure.status, 429)
   interactionResults.push(['v4 failed tool and attempt payloads', true])
 
   // Auxiliary queries must report the real failure with their own request identity.
@@ -988,6 +1008,33 @@ function waitFor(pred, timeout) { return new Promise((res) => { const t0 = Date.
   const fileListReady = await waitFor(() => got.some((m) => m.kind === 'file-list' && m.requestId === 'files-1'), 2000)
   const fileList = got.find((m) => m.kind === 'file-list' && m.requestId === 'files-1')
   interactionResults.push(['file list workspace only', fileListReady && fileList.path === '.' && fileList.entries.some((e) => e.path === 'builds' && e.kind === 'directory') && fileList.entries.some((e) => e.path === 'guide.pdf' && e.mediaType === 'application/pdf') && !fileList.entries.some((e) => e.name === 'outside-link.bin')])
+
+  // 文件引用解析（file-references-v1）：未加载过的子目录与主机原生绝对路径都能
+  // 解析成下载协议需要的相对路径；越界、目录与缺 requestId 被拒绝。
+  ws.send(JSON.stringify({ type: 'file-resolve', requestId: 'resolve-1', sessionId: 's1', path: 'builds/app-release.apk' }))
+  const resolveReady = await waitFor(() => got.some((m) => m.kind === 'file-resolved' && m.requestId === 'resolve-1'), 2000)
+  const resolvedFile = got.find((m) => m.kind === 'file-resolved' && m.requestId === 'resolve-1')
+  interactionResults.push(['file resolve unloaded subdirectory',
+    resolveReady && resolvedFile.path === 'builds/app-release.apk' && resolvedFile.name === 'app-release.apk'
+      && resolvedFile.mediaType === 'application/vnd.android.package-archive' && resolvedFile.size === fileDownloadBytes.length])
+
+  ws.send(JSON.stringify({ type: 'file-resolve', requestId: 'resolve-abs', sessionId: 's1', path: path.join(fileDownloadRoot, 'guide.pdf') }))
+  const resolveAbsReady = await waitFor(() => got.some((m) => m.kind === 'file-resolved' && m.requestId === 'resolve-abs'), 2000)
+  const resolvedAbsolute = got.find((m) => m.kind === 'file-resolved' && m.requestId === 'resolve-abs')
+  interactionResults.push(['file resolve absolute path inside workspace',
+    resolveAbsReady && resolvedAbsolute.path === 'guide.pdf' && resolvedAbsolute.mediaType === 'application/pdf'])
+
+  ws.send(JSON.stringify({ type: 'file-resolve', requestId: 'resolve-outside', sessionId: 's1', path: outsideFile }))
+  const resolveOutsideReady = await waitFor(() => got.some((m) => m.kind === 'error' && m.requestType === 'file-resolve' && m.code === 'file-not-allowed'), 2000)
+  interactionResults.push(['file resolve rejects absolute path outside workspace', resolveOutsideReady])
+
+  ws.send(JSON.stringify({ type: 'file-resolve', requestId: 'resolve-dir', sessionId: 's1', path: 'builds' }))
+  const resolveDirReady = await waitFor(() => got.some((m) => m.kind === 'error' && m.requestType === 'file-resolve' && m.code === 'file-not-regular'), 2000)
+  interactionResults.push(['file resolve rejects directories', resolveDirReady])
+
+  ws.send(JSON.stringify({ type: 'file-resolve', sessionId: 's1', path: 'guide.pdf' }))
+  const resolveRequestIdReady = await waitFor(() => got.some((m) => m.kind === 'error' && m.requestType === 'file-resolve' && m.code === 'bad-request'), 2000)
+  interactionResults.push(['file resolve requires a requestId', resolveRequestIdReady])
 
   ws.send(JSON.stringify({ type: 'file-download-open', requestId: 'download-1', sessionId: 's1', path: 'builds/app-release.apk' }))
   const openedReady = await waitFor(() => got.some((m) => m.kind === 'file-download-opened' && m.requestId === 'download-1'), 2000)

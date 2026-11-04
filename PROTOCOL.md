@@ -74,12 +74,14 @@ const pairingText = Buffer.from(JSON.stringify(payload), 'utf8').toString('base6
 
 客户端必须先执行严格 Base64URL 解码（只允许 `A-Z a-z 0-9 - _`，不接受 `=` padding、原始 JSON 或普通 Base64），再解析 JSON 并检查 `version` 与 `expiresAt`。
 
-首次连接必须请求子协议 `dsh-mobile-v1, dsh-pair.<pairingCode>`，并携带 `X-DSH-Device-ID` 请求头；缺少稳定设备 ID 的配对请求会被拒绝，避免每次重连都创建新的可信设备。该值应为客户端在 Keychain 中持久保存的安装级随机 UUID，仅用于重新配对时复用可信设备记录，不能替代配对码或设备 token 完成鉴权。兼容实现也可把一次性配对码放在 `?pairingCode=`；但子协议不会进入常见的 URL access log，因此优先使用子协议。成功后服务端依次发送：
+首次连接必须请求子协议 `dsh-mobile-v1, dsh-pair.<pairingCode>`，并携带 `X-DSH-Device-ID` 请求头；缺少稳定设备 ID 的配对请求会被拒绝，避免每次重连都创建新的可信设备。该值应为客户端在 Keychain 中持久保存的安装级随机 UUID，仅用于重新配对时复用可信设备记录，不能替代配对码或设备 token 完成鉴权。
+
+浏览器等无法设置自定义握手头的客户端，可以把同一设备 ID 放进子协议 `dsh-device.<id>`（ID 必须由 RFC 6455 token 字符组成，即 `[A-Za-z0-9._-]{8,128}`），把设备名放进 `dsh-device-name.<base64url>`（与请求头的标准 Base64 等价）；设备 ID 仍不是凭证，配对码与长期 token 的要求不变。兼容实现也可把一次性配对码放在 `?pairingCode=`；但子协议不会进入常见的 URL access log，因此优先使用子协议。成功后服务端依次发送：
 
 ```json
 { "kind": "paired", "token": "<长期设备 token>",
   "device": { "id": "...", "name": "iPhone", "createdAt": 1787111700000 } }
-{ "kind": "hello", "protocol": 3, "capabilities": ["split-channels", "images", "commands", "tasks", "goals", "turn-outline-v1", "agent-team-v1", "subagent-conversations-v1", "file-upload-v1", "file-references-v1", "session-cancel", "queue-control", "session-archive", "session-rename", "file-downloads"], "authenticated": true,
+{ "kind": "hello", "protocol": 3, "capabilities": ["split-channels", "network-diagnostics-v1", "images", "commands", "tasks", "goals", "turn-outline-v1", "agent-team-v1", "subagent-conversations-v1", "file-upload-v1", "file-references-v1", "llm-model-config-v1", "session-cancel", "queue-control", "session-archive", "session-rename", "file-downloads"], "authenticated": true,
   "device": { "id": "...", "name": "iPhone" }, "port": 3080, "clients": 1 }
 ```
 
@@ -317,7 +319,7 @@ Agent 调用 DSH 的 `ask_user_question` 工具时，插件接入 Host 的
   "outcome":"answered" }
 ```
 
-`outcome` 为 `answered` 或 `cancelled`。存在匹配 Session 的移动连接时，移动网关优先认领请求，多台移动设备中的第一个合法响应获胜；若没有匹配连接或连接全部断开，则通过 `next()` 回退给 WebUI/后续 Host answerer。所有移动连接都会收到由移动端完成的最终状态并应关闭对应选择界面。重连时网关会重放仍由它持有的问题；DSH 进程重启则会取消这些仅存在于运行时的问题。
+`outcome` 为 `answered` 或 `cancelled`。网关开启时会登记所有待答提问，并同时保留 WebUI/后续 Host answerer；多台移动设备与 WebUI 中的第一个合法响应获胜。实时广播仍按订阅 Session 过滤，后台会话的提问会在设备首次连接或之后打开对应 Session 时以 `replay: true` 重放；登记时没有移动客户端则立刻回退给 WebUI，不会挂住工具调用。所有移动连接都会收到由移动端完成的最终状态并应关闭对应选择界面；DSH 进程重启则会取消这些仅存在于运行时的问题。
 
 ---
 
@@ -812,6 +814,28 @@ iOS 用 `Data(base64Encoded:)` 解码并按 `attachment.mediaType` 渲染，建�
 - 默认每块为 512 KiB、同时最多 4 个下载、单个文件最多 512 MiB。部署方可用 `fileDownloadChunkBytes`、`fileDownloadMaxTransfers`、`fileDownloadMaxBytes`、`fileDownloadIdleMs` 调整；`fileDownloadsEnabled: false` 会关闭该能力，且 `hello.capabilities` 不再包含 `file-downloads`。
 - 绝对路径、空路径（`file-download-open`）、`..` 路径段、NUL 字符、工作目录外的符号链接、目录和其他非普通文件都会被拒绝。`file-list` 不返回符号链接，避免客户端误认为其可下载。
 
+### 文件引用解析（`file-resolve`，`file-references-v1`）
+
+文件卡片和正文里的文件链接可能只带工作目录相对路径或主机原生绝对路径。`file-resolve` 把它们解析成下载协议需要的相对路径与预览元数据，省去先遍历目录的步骤（文件位于未加载过的 `build/` 等子目录时也能直接打开）。
+
+```json
+{ "type": "file-resolve", "requestId": "resolve-1", "sessionId": "session-abc", "path": "build/三亚国庆旅游攻略.pdf" }
+→ {
+  "kind": "file-resolved", "requestId": "resolve-1", "sessionId": "session-abc",
+  "path": "build/三亚国庆旅游攻略.pdf", "name": "三亚国庆旅游攻略.pdf",
+  "mediaType": "application/pdf", "size": 2048000, "modifiedAt": 1787111700000
+}
+```
+
+- 必须带非空 `requestId`（响应回显）与 `sessionId`；`path` 可以是工作目录相对路径，也可以是主机原生绝对路径。
+- 绝对路径只在这里接受，且必须落在该 Session 的工作目录内（macOS 的 `/var` 与 `/private/var` 别名会被映射后再做包含校验）；`file-download-open` 仍只接受相对路径。
+- 目录、符号链接逃逸、NUL/`..` 路径段、超过 `fileDownloadMaxBytes` 的文件分别返回 `file-not-regular` / `file-not-allowed` / `file-too-large`。
+- 成功后客户端把返回的 `path` 交给 `file-download-open` 即可预览；`hello.capabilities` 包含 `file-references-v1` 且 `fileDownloadsEnabled` 开启时才公布该能力。
+
+### 服务端网络检测（`network-diagnostics-v1`）
+
+`hello.capabilities` 包含 `network-diagnostics-v1` 表示管理面板支持服务端网络检测：管理接口 `POST /mgw/network-test`（仅本机回环）向每条已鉴权移动连接发一次 WebSocket Ping/Pong，按设备与通道返回协议 RTT、最近一分钟样本、平均值与 P95。该能力只影响 WebUI 面板，移动端不会收到额外帧；经过 Tunnel 或代理时 RTT 可能只反映代理链路，不能当作业务处理耗时。
+
 ### `session-stats` 详细（输入框统计条）
 ```json
 { "type": "session-stats", "sessionId": "session-abc" }
@@ -1127,7 +1151,7 @@ Control/旧单连接接收全局模式状态增量，不受所订阅会话过滤
 | kind | 触发时机 |
 |---|---|
 | `paired` | 首次配对成功；仅此一次返回长期设备 token |
-| `hello` | 连接成功：`{ "kind":"hello", "protocol":3, "capabilities":["split-channels","images","commands","tasks","goals","turn-outline-v1","agent-team-v1","subagent-conversations-v1","file-upload-v1","file-references-v1","session-cancel","queue-control","session-archive","session-rename","file-downloads"], "authenticated":true, "port":3080, "clients":1 }` |
+| `hello` | 连接成功：`{ "kind":"hello", "protocol":3, "capabilities":["split-channels","network-diagnostics-v1","images","commands","tasks","goals","turn-outline-v1","agent-team-v1","subagent-conversations-v1","file-upload-v1","file-references-v1","llm-model-config-v1","session-cancel","queue-control","session-archive","session-rename","file-downloads"], "authenticated":true, "port":3080, "clients":1 }` |
 | `event` | 任意会话的 agent 输出（见下） |
 | `session-queues` / `session-queue` | Host 队列完整快照 / 单个 Session 队列替换值 |
 | `session-archives` | Host 的完整 Session 归档集合在连接初始化或 WebUI/App 归档后变化 |
@@ -1146,12 +1170,15 @@ Control/旧单连接接收全局模式状态增量，不受所订阅会话过滤
 `event.type` 覆盖（精炼字段）：
 - `user/message` → `{text, source, images?: ImageAttachmentRef[], attachments?: MessageAttachment[]}`
 - 实时 token 使用独立 `assistant-stream`，不是带持久 seq 的 `assistant/chunk`；详见 [rc.2 接入说明](docs/dsh-rc2-mobile-integration.md)。
-- `assistant/attempt` → `{turn, step, stream[]}`
-- `assistant/message` → `{turn, step, text, reasoning, toolCalls[], interrupted?, usage?}`
+- `assistant/attempt` → `{turn, step, stream[], finish?}`
+- `assistant/message` → `{turn, step, text, reasoning, toolCalls[], finish?, interrupted?, usage?}`
 - `session/title` → `{title, source?}`
 - `tool/call` → `{turn, step, callId, name, arguments}`
-- `tool/result` → `{turn, step, callId, isError, preview(≤400字符)}`
-- `turn/start|end` / `step/start|end` → `{turn, step, reason?}`
+- `tool/result` → `{turn, step, callId, isError, preview(≤400字符), output(≤16KB 首尾摘要), outputTruncated}`
+- `llm/retry` → `{turn, step, retryId, retry, provider, mode, maxRetries, delayMs, failure?}`；`llm/retry-started` 只带 `{turn, step, retryId, retry}`
+- `turn/start|end` / `step/start|end` → `{turn, step, reason?, reasonDetails?}`；`reason` 保持本仓库既有形态（成功为 kind 字符串，错误/中止为 `{kind,error|reason}`，小程序兼容），`reasonDetails` 为上游形态的增量字段
+
+`finish` 为 `{kind, failure?}`（`failure` 只保留 message/code/name/reason/requestId/status/providerRetryAfterMs），`output` 在超过 16KB 时保留首尾各 8KB 并以 `[…]` 连接，同时给出 `outputTruncated: true`。历史 `history` 响应中的对应事件与实时帧同形。
 
 `MessageAttachment` 的普通文件元素形如 `{kind:"file", name, receiptId?, attachmentId?, bytes?, mediaType?}`，工作区目录元素形如 `{kind:"directory", name, path}`。发送 `message` 时也可带 `{kind:"file"|"directory", path, name?}`，其中 `path` 必须是工作区相对路径；网关拒绝绝对路径、`..` 路径和超过 6 项的请求。当前 DSH Remote 仅提供 `session/prompt`，工作区文件/目录按受校验的上下文引用发送并保留在历史附件元数据中，不伪造 `receiptId`，也不会未经用户操作递归上传目录；原生文件 receipt 上传需宿主提供 `fileUploads.uploadStream` 后再启用。
 

@@ -380,6 +380,7 @@ function expectRejected(url, options = {}) {
   assert.equal(hello.protocol, 3)
   assert.deepEqual(hello.capabilities, [
     'split-channels',
+    'network-diagnostics-v1',
     'assistant-stream-v1',
     'session-resume-v1',
     'history-format-version',
@@ -451,6 +452,17 @@ function expectRejected(url, options = {}) {
     `${wsUrl}?pairingCode=${encodeURIComponent(pairBody.payload.pairingCode)}`,
     { headers: { 'X-DSH-Device-ID': clientDeviceId } },
   ), 401)
+
+  // 服务端网络诊断：管理接口向已鉴权连接发协议 Ping/Pong 并返回 RTT。
+  const networkTest = await fetch(`${base}/mgw/network-test`, { method: 'POST', headers: { Origin: base } })
+  assert.equal(networkTest.status, 200)
+  const networkBody = await networkTest.json()
+  assert.equal(Array.isArray(networkBody.devices), true)
+  const measuredChannels = networkBody.devices.flatMap((device) => device.channels || [])
+  assert.ok(measuredChannels.length >= 1, 'at least one connected device channel is measured')
+  assert.ok(measuredChannels.every((channel) => channel.transport === 'websocket'))
+  assert.ok(measuredChannels.some((channel) => channel.status === 'ok' && typeof channel.rttMs === 'number'))
+  assert.ok(measuredChannels.every((channel) => Array.isArray(channel.samples)))
 
   const unavailableChanges = waitForMessage(pairedSocket, 'error')
   pairedSocket.send(JSON.stringify({ type: 'workspace-changes-summary', requestId: 'missing-service', sessionId: 's1', seq: 12 }))
@@ -750,6 +762,43 @@ function expectRejected(url, options = {}) {
   const listAfterRename = await (await fetch(`${base}/mgw/devices`, { headers: { Origin: base } })).json()
   assert.equal(listAfterRename.devices.find((d) => d.id === renameDeviceId).name, 'Xiaomi 14 Ultra')
   renameSocket.close()
+
+  // 浏览器等无法设置自定义握手头的客户端：设备 ID 与名称可放进子协议；
+  // 设备 ID 仍不是凭证，配对码与长期 token 的要求不变。
+  const browserPair = await (await fetch(`${base}/mgw/pair`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Origin: base },
+    body: JSON.stringify({ name: 'Browser Pair', publicUrl: wsUrl }),
+  })).json()
+  const browserDeviceId = 'browser-device-0001'
+  const browserSocket = new WebSocket(wsUrl, [
+    'dsh-mobile-v1',
+    `dsh-pair.${browserPair.payload.pairingCode}`,
+    `dsh-device.${browserDeviceId}`,
+    `dsh-device-name.${Buffer.from('Browser Phone').toString('base64url')}`,
+  ])
+  const browserPairedPromise = waitForMessage(browserSocket, 'paired')
+  await once(browserSocket, 'open')
+  const browserPaired = await browserPairedPromise
+  assert.equal(browserPaired.device.name, 'Browser Phone', 'device name may arrive as a subprotocol')
+  assert.equal(await expectRejected(wsUrl, { protocols: [`dsh-device.${browserDeviceId}`] }), 401,
+    'a subprotocol device id alone is not a credential')
+  browserSocket.close()
+  await once(browserSocket, 'close')
+
+  const invalidSubprotocolPair = await (await fetch(`${base}/mgw/pair`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Origin: base },
+    body: JSON.stringify({ name: 'Invalid Browser', publicUrl: wsUrl }),
+  })).json()
+  const invalidSubprotocolStatus = await new Promise((resolve, reject) => {
+    const socket = new WebSocket(wsUrl, ['dsh-mobile-v1', `dsh-pair.${invalidSubprotocolPair.payload.pairingCode}`, 'dsh-device.abcd'])
+    const timer = setTimeout(() => { socket.terminate(); reject(new Error('timed out waiting for rejection')) }, 5000)
+    socket.once('open', () => { clearTimeout(timer); reject(new Error('expected rejection')) })
+    socket.once('unexpected-response', (_req, response) => { clearTimeout(timer); resolve(response.statusCode) })
+    socket.once('error', () => {})
+  })
+  assert.equal(invalidSubprotocolStatus, 400, 'an invalid dsh-device subprotocol id is rejected')
 
   const disableGatewayResponse = await fetch(`${base}/mgw/gateway`, {
     method: 'POST',
