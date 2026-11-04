@@ -176,7 +176,8 @@ const seeds = [
   },
   null,                                                                                      // dismissedNotice
   'ws://192.168.3.110:3081/ws/mobile',                                                       // publicUrl
-  'auto',                                                                                    // pairingRoute
+  'auto',                                                                                    // miniPlan
+  'lan',                                                                                     // appRoute
   false,                                                                                     // connectionHelpOpen
   false,                                                                                     // toolsOpen
   false,                                                                                     // toolBusy
@@ -267,7 +268,9 @@ directRegistrations.length = 0
 directExported.apply({ slots: { inject: (n, t) => t(), register: (o, c) => { directRegistrations.push({ options: o, component: c }); return () => {} } } })
 const htmlC = renderToStaticMarkup(React.createElement(directExported.DevicePanel, { close: () => {} }))
 for (const [needle, what] of [
-  ['连接方案', 'connection-plan selector present in direct mode'],
+  ['小程序连接（推荐）', 'mini-program module present'],
+  ['App 直连（备用）', 'app direct module present'],
+  ['生成 App 二维码', 'app module has its own QR button'],
   ['aria-checked="true"', 'a mode is selected'],
   ['公网接入', 'direct-mode public-access label is plain (no relay caveat)'],
   ['ws://192.168.3.110:3081/ws/mobile', 'gateway address shown'],
@@ -461,7 +464,7 @@ check(src.includes('function apiPath') && src.includes('document.baseURI')
   && src.includes('fetch(apiPath(path)'), 'management RPC resolves against the document base (gateway prefix safe)')
 check(src.includes("'/mgw/cloudflare'") && src.includes('/mgw/tools/') && src.includes('pairingUrlFor'),
   'cloudflare tunnel, web tools and pairing routes wired')
-check(src.includes("'Quick Channel（Quick Tunnel）'") && src.includes("'Cloudflare 外网'") && src.includes("'公网或其他手动地址'") && src.includes("'鲸尾公网 · 小程序'") && !src.includes('建设中'),
+check(src.includes("'Cloudflare 外网'") && src.includes("'公网或其他手动地址'") && src.includes("'鲸尾公网 · 小程序'") && src.includes("'小程序连接（推荐）'") && src.includes("'App 直连（备用）'") && !src.includes('建设中'),
   'custom Select offers cloudflare modes and the custom route')
 check(src.includes('function GatewaySelect') && src.includes("addEventListener('pointerdown', outside)")
   && src.includes("if (event.key === 'Escape')"),
