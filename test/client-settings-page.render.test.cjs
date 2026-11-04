@@ -454,6 +454,8 @@ check(src.includes("value: 'tailscale'") && src.includes('主机 Tailscale 地�
   'pairing offers the Tailscale route with a manual host-address input')
 check(src.includes("'/mgw/ui'") && src.includes('在左侧栏显示入口'),
   'the sidebar entry can be toggled from the plugin page')
+check(src.includes("(pairingRoute === 'relay' || pairingRoute === 'auto') && (relayInfo"),
+  'relay registration content is scoped to the relay and auto plans')
 check(src.includes("id: 'mobile-gateway'"), 'registers the mobile-gateway settings section')
 check(src.includes('function apiPath') && src.includes('document.baseURI')
   && src.includes('fetch(apiPath(path)'), 'management RPC resolves against the document base (gateway prefix safe)')
