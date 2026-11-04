@@ -111,13 +111,16 @@ const pairingText = Buffer.from(JSON.stringify(payload), 'utf8').toString('base6
 
 | 字段 | 内容 | 使用方 |
 |---|---|---|
-| `lan` | `ws://`（或 `wss://`）私网/本机地址，规范化去重，最多 16 项 | 小程序与 App |
+| `lan` | `ws://`（或 `wss://`）私网/本机地址（含 Tailscale `100.64.0.0/10` / `fd7a:115c:a1e0::/48`），规范化去重，最多 16 项；物理局域网地址排在 Tailscale 之前 | 小程序与 App |
 | `public` | `wss://` 公网地址（用户自己的域名/反代/Cloudflare Tunnel） | 仅 App |
 | `relay` | `{ relay, nodeId, agentPubKey, gatewayName?, authMode: "gateway" }`；`relay` 必须是公网 `wss://`，`nodeId` 8–128 位 URL 安全字符，`agentPubKey` 为 32 字节 Base64；客户端连接地址为 `relay` 去尾斜杠后拼 `/c/` + `nodeId` | 仅小程序 |
 
 选路规则：微信小程序的 socket 必须命中合法域名，运营者自己的公网直连地址基本不可用，因此小程序的公网线路是中继；多端 App 与原生 App 没有合法域名限制、也没有微信登录换不到中继租赁，因此只拨公网直连。两端都以「上次真正连通的地址」为第一候选，中继取不到租赁时继续回退局域网候选（配对码仍然有效）。小程序手动输入的公网地址会被客户端直接拒绝并给出说明，不进入候选链。
 
 `miniProgramRoute` 是早期版本给旧小程序的等价字段（`{ mode: "direct", publicUrl, endpoints }` 或 `{ mode: "relay", relay, nodeId, agentPubKey, gatewayName }`），继续随载荷输出；新客户端应优先读取 `routes`。
+
+`POST /mgw/pair` 的 `route` 还支持 `tailscale`：只接受 `ws://` + Tailscale IP（未显式给出时使用本机探测到的第一个 Tailscale 地址），局域网入口未监听或地址不是 Tailscale 时返回 409；生成的载荷只把 Tailscale 地址放进 `routes.lan`，不包含公网、中继或其他局域网端点，也不生成 `miniProgramRoute`（微信小程序线上环境要求 wss 域名）。`routes.lan` 中的 Tailscale 地址对客户端与其他私网地址等价，客户端按“物理局域网优先、Tailscale 其后”的顺序尝试即可。
+
 本机管理接口 `POST /mgw/gateway` 接受 `{"mode":"disabled|temporary|persistent"}` 中的一个具体值，例如 `{"mode":"persistent"}`。兼容旧 `{"enabled":true}`（临时开启）与 false（关闭）；不能同时传 `mode` 和 `enabled`。返回 `gatewayEnabled`、`gatewayMode`、`waitExpiresAt`、`connectedClients`。参数错误返回 400；保存失败返回 500 且不改变当前运行模式。
 
 `GET /mgw/status` 增加身份、地址列表及 `gatewayMode`。模式的持久化不影响配对码有效期和文件传输超时。自动超时关闭若遇到磁盘写入失败，会保持当前进程关闭并记录错误；重启可能仍按旧保存模式运行，需修复存储后再次保存选择。

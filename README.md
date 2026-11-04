@@ -6,6 +6,13 @@
 
 `dsh-plugin-weapp-gateway` · DeepSeek Harness 移动客户端连接插件
 
+### v0.8.41 · Tailscale 参与配对选路
+
+- 「配对连接方式」新增 **Tailscale 直连**：只使用本机 Tailscale 地址（`ws://100.x` / IPv6），二维码只包含 Tailscale 端点，不泄露公网或中继；检测不到地址或局域网入口未监听时该选项禁用。
+- **自动选择**与默认配对载荷现在会把 Tailscale 地址作为局域网类候选一并下发（物理局域网地址在前、Tailscale 在后），手机在同一 tailnet 时自动选中。
+- 管理接口 `POST /mgw/pair` 支持 `route: "tailscale"`：校验 `ws://` + Tailscale IP，局域网入口未开启或地址不是 Tailscale 时返回 409；载荷只带 `routes.lan`，不生成 `miniProgramRoute`（小程序线上环境要求 wss 域名，该二维码主要供 DSH App 使用）。
+- 面板帮助文案补充 Tailscale 说明；协议文档更新 `routes.lan` 的 Tailscale 语义。
+- 测试：`test/lan.test.mjs` 覆盖 Tailscale 配对路线（201、端点只含 Tailscale、非 Tailscale 地址 409），全量 36 个测试文件通过。
 ### v0.8.40 · Tailscale 直连支持
 
 - 新增 [`lib/tailscale-addresses.mjs`](lib/tailscale-addresses.mjs)：识别本机 Tailscale 地址（`100.64.0.0/10` 与 `fd7a:115c:a1e0::/48`），并在 `/mgw/status` 新增 `tailscale: { addresses, urls }`（只读本机接口，不推断手机 IP；检测到地址不等于已登录 tailnet）。

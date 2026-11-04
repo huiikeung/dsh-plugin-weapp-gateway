@@ -167,8 +167,31 @@ async function waitForLanStatus(base) {
   const pair = await pairResponse.json()
   assert.equal(pair.payload.publicUrl, lanUrl)
   assert.equal(pair.payload.gatewayId, status.gatewayId)
-  assert.deepEqual(pair.payload.endpoints, [lanUrl])
-  assert.deepEqual(status.endpoints, [lanUrl])
+  assert.ok(pair.payload.endpoints.includes(lanUrl))
+  assert.ok(status.endpoints.includes(lanUrl))
+
+  // Tailscale 专用路线：只使用 ws:// Tailscale 地址，不泄露公网/中继信息，
+  // 也不生成小程序路线（线上小程序要求 wss 域名）。
+  const tailscalePairResponse = await fetch(`${base}/mgw/pair`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Origin: base },
+    body: JSON.stringify({ route: 'tailscale', publicUrl: 'ws://100.101.102.103:3081/ws/mobile' }),
+  })
+  assert.equal(tailscalePairResponse.status, 201)
+  const tailscalePair = await tailscalePairResponse.json()
+  assert.equal(tailscalePair.payload.publicUrl, 'ws://100.101.102.103:3081/ws/mobile')
+  assert.ok(tailscalePair.payload.endpoints.includes('ws://100.101.102.103:3081/ws/mobile'))
+  assert.ok(tailscalePair.payload.endpoints.every((url) => /^ws:\/\/(100\.|\[fd7a:)/.test(url)),
+    'Tailscale pairing advertises only ws:// Tailscale addresses')
+  assert.deepEqual(tailscalePair.payload.routes, { lan: tailscalePair.payload.endpoints })
+  assert.equal('miniProgramRoute' in tailscalePair.payload, false)
+
+  const badTailscale = await fetch(`${base}/mgw/pair`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Origin: base },
+    body: JSON.stringify({ route: 'tailscale', publicUrl: 'ws://192.168.1.20:3081/ws/mobile' }),
+  })
+  assert.equal(badTailscale.status, 409, 'Tailscale pairing rejects non-Tailscale addresses')
 
   const deviceId = '7bb30e78-4a31-4478-aae1-00a41d280637'
   const ws = new WebSocket(
