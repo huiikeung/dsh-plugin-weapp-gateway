@@ -6,6 +6,13 @@
 
 `dsh-plugin-weapp-gateway` · DeepSeek Harness 移动客户端连接插件
 
+### v0.8.42 · 同步上游面板结构
+
+- 左侧栏分组补齐为上游的 5 项：**通用设置 / 连接与配对 / 可信设备 / 网络检测 / 安装应用**；「服务端网络检测」从通用设置移到独立的「网络检测」分组。
+- 新增「安装应用」分组：iOS（TestFlight 公测 + App Store 安装 TestFlight）与 Android（APK 下载 / Release 页）分页引导，自动读取官方 Release 最新版本（GitHub API + 本地 6 小时缓存）；不内置上游的大体积截图，保留步骤、按钮与版本信息。
+- 新增上游的**侧边栏入口**：Harness WebUI 侧边栏底部「鲸尾移动设备」按钮 + `shell.overlay` 弹窗，与设置页入口共享同一 open 状态；设置页入口保留。
+- 配对方式中的 Tailscale 直连选项沿用 v0.8.41（检测到地址且局域网入口监听时可用）。
+- 渲染测试同步更新（三个 slot 注册、5 个分组、安装引导内容），全量测试保持通过。
 ### v0.8.41 · Tailscale 参与配对选路
 
 - 「配对连接方式」新增 **Tailscale 直连**：只使用本机 Tailscale 地址（`ws://100.x` / IPv6），二维码只包含 Tailscale 端点，不泄露公网或中继；检测不到地址或局域网入口未监听时该选项禁用。

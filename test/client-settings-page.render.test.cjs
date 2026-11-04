@@ -92,13 +92,21 @@ const exported = loadBundle(React).factory((id) => {
 console.log('=== registration ===')
 check(JSON.stringify(exported.inject) === '["slots"]', `inject = ["slots"] (got ${JSON.stringify(exported.inject)})`)
 exported.apply({ slots })
-check(registrations.length === 1, `exactly one slot registration (got ${registrations.length})`)
-const reg = registrations[0]
-check(reg.options.name === 'settings.section', `slot name = settings.section (got ${reg.options.name})`)
-check(reg.options.id === 'mobile-gateway', `section id = mobile-gateway (got ${reg.options.id})`)
-check(reg.options.order === 35, `section order = 35 (got ${reg.options.order})`)
-check(typeof reg.options.label === 'function' && reg.options.label() === '鲸尾网关助手', 'label = 鲸尾网关助手')
-check(typeof reg.component === 'function', 'component is a function')
+check(registrations.length === 3, `three slot registrations: settings + sidebar + overlay (got ${registrations.length})`)
+const sectionReg = registrations.find((r) => r.options.name === 'settings.section')
+const sidebarReg = registrations.find((r) => r.options.name === 'sidebar.footer.action')
+const overlayReg = registrations.find((r) => r.options.name === 'shell.overlay')
+check(!!sectionReg, 'settings.section registered')
+check(sectionReg.options.id === 'mobile-gateway', `section id = mobile-gateway (got ${sectionReg.options.id})`)
+check(sectionReg.options.order === 35, `section order = 35 (got ${sectionReg.options.order})`)
+check(typeof sectionReg.options.label === 'function' && sectionReg.options.label() === '鲸尾网关助手', 'label = 鲸尾网关助手')
+check(typeof sectionReg.component === 'function', 'section component is a function')
+check(!!sidebarReg && sidebarReg.options.id === 'mobile-gateway-devices' && sidebarReg.options.order === 80,
+  'sidebar footer action registered (order 80)')
+check(typeof sidebarReg.component === 'function', 'sidebar component is a function')
+check(!!overlayReg && overlayReg.options.id === 'mobile-gateway-devices-panel' && overlayReg.options.order === 100,
+  'shell overlay registered (order 100)')
+check(typeof overlayReg.component === 'function', 'overlay component is a function')
 
 // ------------------------------------------------------- settings entry (fork)
 console.log('\n=== settings entry ===')
@@ -110,11 +118,11 @@ const entryExported = loadBundle(React).factory((id) => {
   throw new Error(`unexpected require: ${id}`)
 })
 entryExported.apply({ slots: { inject: (n, t) => t(), register: (o, c) => { entryRegistrations.push({ options: o, component: c }); return () => {} } } })
-check(entryRegistrations.length === 1 && entryRegistrations[0].options.name === 'settings.section',
-  'the entry registers a settings.section (not a sidebar footer action)')
-check(entryRegistrations[0].options.id === 'mobile-gateway', 'section id stays mobile-gateway')
-check(!src.includes('sidebar.footer.action') && !src.includes('shell.overlay'),
-  'no sidebar footer button and no shell overlay registration')
+check(entryRegistrations.some((r) => r.options.name === 'settings.section' && r.options.id === 'mobile-gateway'),
+  'the entry keeps the settings.section registration')
+check(entryRegistrations.some((r) => r.options.name === 'sidebar.footer.action')
+  && entryRegistrations.some((r) => r.options.name === 'shell.overlay'),
+  'upstream sidebar footer action + shell overlay are registered alongside it')
 check(src.includes('React.useEffect(() => { setOpen(true) }, [])'),
   'the settings section opens the dialog on mount (no intermediate card)')
 check(src.includes('apiPath') && src.includes('document.baseURI'),
@@ -134,8 +142,12 @@ for (const [needle, what] of [
   ['网关运行模式', 'gateway mode row'],
   ['设备鉴权', 'auth row'],
   ['可信设备', 'trusted devices group'],
+  ['网络检测', 'network diagnostics nav section'],
+  ['安装应用', 'install guide nav section'],
   ['aria-label="工具"', 'tools gear button rendered (menu opens on click)'],
 ]) check(htmlA.includes(needle), what)
+check(htmlA.includes('在手机上安装应用') && htmlA.includes('下载 Android 安装包'),
+  'install guide renders its Android steps by default in a non-iOS environment')
 check(!htmlA.includes('正在检查系统组件…'), 'public access stays hidden while status is loading')
 check(!htmlA.includes('DSH App / 小程序连接地址'), 'custom address field is hidden until the custom route is selected')
 
@@ -428,13 +440,16 @@ for (const [needle, what] of [
 
 // ------------------------------------------------------- source-level guarantees
 console.log('\n=== source guarantees ===')
-check(!src.includes('sidebar.footer.action'), 'no sidebar.footer.action contribution')
-check(!src.includes('shell.overlay'), 'no shell.overlay contribution')
+check(src.includes("ctx.slots.inject('sidebar.footer.action'") && src.includes("'mobile-gateway-devices'"),
+  'upstream sidebar footer action registered')
+check(src.includes("ctx.slots.inject('shell.overlay'") && src.includes("'mobile-gateway-devices-panel'"),
+  'upstream shell overlay registered')
 check((src.match(/position: 'fixed'/g) || []).length === 2,
   'fixed positioning is limited to the two dialogs (backdrop + pairing)')
 check(src.includes('mgw-pairing-dialog') && src.includes('prefers-reduced-motion'),
   'the pairing dialog is animated and reduced-motion aware')
-check(!src.includes('sidebar.footer.action'), 'no sidebar footer button re-added')
+check(src.includes("['network', '网络检测']") && src.includes("['install', '安装应用']"),
+  'panel offers the upstream network and install sections')
 check(src.includes("id: 'mobile-gateway'"), 'registers the mobile-gateway settings section')
 check(src.includes('function apiPath') && src.includes('document.baseURI')
   && src.includes('fetch(apiPath(path)'), 'management RPC resolves against the document base (gateway prefix safe)')
