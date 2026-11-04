@@ -240,6 +240,7 @@ for (const [needle, what] of [
   ['公网接入', 'public access label is independent of pairing mode'],
   ['若安装或更新后连接异常，请重启应用', 'restart notice shown for the current gateway instance'],
   ['展开其他已配对设备（1）', 'offline devices collapse behind a toggle'],
+  ['一键清除离线设备（1）', 'one-click clear-offline button carries the offline count'],
   ['aria-label="工具"', 'tools gear button rendered'],
   ['aria-haspopup="menu" aria-expanded="false"', 'tools gear button present (menu opens on click)'],
 ]) check(htmlB.includes(needle), what)

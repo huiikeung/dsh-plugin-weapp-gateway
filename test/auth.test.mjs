@@ -832,6 +832,35 @@ function expectRejected(url, options = {}) {
   })
   assert.equal(invalidSubprotocolStatus, 400, 'an invalid dsh-device subprotocol id is rejected')
 
+  // 一键清除离线设备：断开剩余已配对连接后，服务端把设备标为离线，
+  // 随后一次调用吊销所有离线设备（在线设备不在其中）。
+  for (const socket of [pairedSocket, rePairedSocket]) {
+    if (socket.readyState === 1) {
+      socket.close()
+      await once(socket, 'close')
+    }
+  }
+  let offlineIds = []
+  for (let attempt = 0; attempt < 60; attempt += 1) {
+    const listed = (await (await fetch(`${base}/mgw/devices`)).json()).devices
+    offlineIds = listed.filter((device) => !device.online).map((device) => device.id)
+    if (offlineIds.length > 0) break
+    await new Promise((resolve) => setTimeout(resolve, 100))
+  }
+  assert.ok(offlineIds.length > 0, 'closed connections mark devices offline')
+  const clearOfflineResponse = await fetch(`${base}/mgw/devices/revoke-offline`, {
+    method: 'POST',
+    headers: { Origin: base },
+  })
+  assert.equal(clearOfflineResponse.status, 200)
+  const cleared = await clearOfflineResponse.json()
+  assert.ok(cleared.count >= offlineIds.length, 'every offline device is revoked in one call')
+  assert.equal(cleared.removed.length, cleared.count)
+  const afterClearList = (await (await fetch(`${base}/mgw/devices`)).json()).devices
+  assert.equal(afterClearList.filter((device) => offlineIds.includes(device.id)).length, 0,
+    'offline devices are removed from the trusted list')
+  assert.equal(afterClearList.filter((device) => !device.online).length, 0, 'no offline devices left')
+
   const disableGatewayResponse = await fetch(`${base}/mgw/gateway`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Origin: base },
