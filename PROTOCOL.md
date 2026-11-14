@@ -682,6 +682,8 @@ let image = [
 | `session-rename` | `sessionId`, `title` | 写入用户指定的持久化 Session 名称 |
 | `history` | `sessionId`, `beforeSeq?`, `historyFormatVersion?`, `maxMessages?`, `maxBytes?`, `view?` | 历史事件页（见下） |
 | `attachment` | `sessionId`, `attachmentId` | 读取历史中属于该会话的图片字节 |
+| `workspace-changes-summary` | `sessionId`, `seq`, `requestId` | 整轮文件改动清单和增删统计；需 `workspace-changes-v1` |
+| `workspace-changes-diff` | `sessionId`, `seq`, `index`, `requestId` | 按清单原始下标读取带行号的 diff；需 `workspace-changes-v1` |
 | `file-list` | `sessionId`, `path?`, `requestId?` | 列出会话工作目录内的一层文件与文件夹 |
 | `file-download-open` | `sessionId`, `path`, `requestId` | 打开一个工作目录内的普通文件下载 |
 | `file-download-read` | `transferId`, `offset` | 拉取下载的下一块字节 |
@@ -824,7 +826,7 @@ iOS 用 `Data(base64Encoded:)` 解码并按 `attachment.mediaType` 渲染，建�
 - 客户端必须严格使用服务端返回块的 `offset + 已解码 data 字节数` 作为下一次 `offset`；当前版本不支持断线续传。请先写入临时文件，收到 `eof: true` 后校验整文件 SHA-256，再原子重命名为最终文件。
 - 每个 `transferId` 仅归属创建它的 WebSocket 连接。连接关闭、`file-download-cancel`、空闲 2 分钟、传完最后一块或插件卸载都会关闭文件句柄；取消成功返回 `{ "kind":"file-download-cancelled", "transferId":"..." }`。
 - 默认每块为 512 KiB、同时最多 4 个下载、单个文件最多 512 MiB。部署方可用 `fileDownloadChunkBytes`、`fileDownloadMaxTransfers`、`fileDownloadMaxBytes`、`fileDownloadIdleMs` 调整；`fileDownloadsEnabled: false` 会关闭该能力，且 `hello.capabilities` 不再包含 `file-downloads`。
-- 绝对路径、空路径（`file-download-open`）、`..` 路径段、NUL 字符、工作目录外的符号链接、目录和其他非普通文件都会被拒绝。`file-list` 不返回符号链接，避免客户端误认为其可下载。
+- `file-download-open` 接受 `file-resolve` 返回的相对或绝对路径。空路径、`..` 路径段、NUL、目录及非普通文件仍被拒绝；外部文件仅可经 Host 授权读取。`file-list` 仍拒绝绝对路径、工作区外目录和符号链接。旧版 Host 缺少 `workspaceFiles` 时保持工作区内功能，不能读取外部文件。
 
 ### 文件引用解析（`file-resolve`，`file-references-v1`）
 

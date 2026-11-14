@@ -5,7 +5,7 @@ import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
 import { pathToFileURL } from 'node:url'
 import path from 'node:path'
-import { createDshHostAdapter } from '../lib/dsh-host-adapter.mjs'
+import { createDshHostAdapter, DSH_VERSION } from '../lib/dsh-host-adapter.mjs'
 import { createSpeechInputManager } from '../lib/speech-input.mjs'
 
 if (!process.env.DSH_INSTALL_ROOT) {

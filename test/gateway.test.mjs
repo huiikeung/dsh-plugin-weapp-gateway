@@ -356,6 +356,10 @@ ctx.agentDefaultModel = {
 ctx.typertGateway = {
   async invoke(req) {
     invokeCalls.push(req)
+    // This fixture's Host refuses external reads; positive reads are covered by external-files.test.mjs.
+    if (req.namespace === 'workspaceFiles') {
+      throw Object.assign(new Error('Host refused external file'), { code: 'workspace-file/outside-workspace' })
+    }
     if (req.namespace === 'agentPresets' && req.method === 'select') {
       assert.equal(req.args.agentId, 'preset-session')
       presetSession.agentPreset = req.args.agentPreset

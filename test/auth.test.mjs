@@ -424,6 +424,7 @@ function expectRejected(url, options = {}) {
     'session-create',
     'session-agent-preset',
     'agent-team-v1',
+    'agent-team-mode-v1',
     'subagent-conversations-v1',
     'wechat-clawbot-control-v2',
     'commands',
