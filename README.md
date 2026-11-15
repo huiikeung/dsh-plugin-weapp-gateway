@@ -11,6 +11,11 @@
 - 「兼容 App（备用）」的连接方式下拉与下方「配对入口」摘要卡片之间增加间距（16px），下拉不再紧贴提示卡片。
 - 摘要卡片的内边距、下方「配对入口地址」输入框与其余配对布局保持不变。
 - 全量测试通过。
+### v0.8.55 · 修复设置页无法加载（locale 注入缺失）
+
+- 修复 v0.8.54 引入的客户端加载失败：上游的语言同步 effect 引用了 `ctx.locale`，但 fork 未在 `inject` 里声明该服务，DSH 直接抛出 `cannot get property "locale" without inject`，整个客户端模块加载失败，设置页空白。
+- fork 未引入上游的界面语言/多语言系统，遂整块移除语言同步 effect 与「界面语言」选择卡片（该卡片还引用了不存在的 `language`/`setUiLanguage`/`tr`），面板保持中文默认。
+- `inject` 恢复为 `['slots']`；设置页四个分组与配对模块渲染恢复正常。
 ### v0.8.54 · 同步上游 0.12.1 新功能
 
 - **生图工具图片转发**（tool-result-images-v1）：`tool/result`、`tool/ptc-dispatch`、`tool/code-dispatch` 与会话历史快照携带生成图片附件元数据（PNG/JPEG/WebP/GIF，按附件 ID 去重），App 可直接展示生图结果；手机经控制连接 `attachment` 请求图片。
