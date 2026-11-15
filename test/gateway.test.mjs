@@ -54,6 +54,33 @@ const assert = await import('node:assert/strict')
   assert.equal(failed.requestId, 'r2')
 }
 
+// The mini program pulls the pending queue when a control-stream push is missed.
+{
+  const asked = []
+  const api = { sessions: {
+    projections: async (payload) => {
+      asked.push(payload)
+      return { kind: 'sequenced', asOfSeq: 12, values: { inbox: {
+        'next-turn': [{ id: 'message-1', role: 'user', source: { kind: 'user', rpcId: 'prompt-1' }, content: [{ type: 'text', text: '排队一' }] }],
+        'next-step': [{ id: 'message-2', role: 'user', source: { kind: 'user' }, content: [{ type: 'text', text: '插话' }] }],
+      } } }
+    },
+  } }
+  const pulled = await handleQuery(api, null, null, { type: 'session-queue', sessionId: 's1', requestId: 'rq-1' })
+  assert.deepEqual(asked, [{ sessionId: 's1' }])
+  assert.equal(pulled.kind, 'session-queue')
+  assert.equal(pulled.requestId, 'rq-1')
+  assert.deepEqual(pulled.items.map((item) => item.placement), ['queued', 'steering'])
+  assert.equal(pulled.items[0].message.content[0].text, '排队一')
+
+  // Older hosts without projections still get an empty queue instead of an error loop.
+  const empty = await handleQuery({ sessions: {} }, null, null, { type: 'session-queue', sessionId: 's1' })
+  assert.deepEqual(empty, { kind: 'session-queue', sessionId: 's1', items: [] })
+
+  const missing = await handleQuery(api, null, null, { type: 'session-queue' })
+  assert.equal(missing.code, 'bad-request')
+}
+
 // Compact V4 history and reject stale/unversioned cursor coordinates before RPC.
 {
   const stream = [{ type: 'text-chunks', time0: 1, index: 0, dt: [], texts: ['x'.repeat(100_000)] }]

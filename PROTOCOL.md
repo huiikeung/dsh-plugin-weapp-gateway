@@ -622,6 +622,13 @@ let image = [
 
 ```json
 { "kind": "session-queue", "sessionId": "session-abc", "items": [] }
+
+客户端也可以主动拉取当前会话队列（小程序在打开会话、发送排队消息、回到前台时使用；控制流推送丢失时靠它兜底）：
+
+    → { "type": "session-queue", "sessionId": "session-abc", "requestId": "rq-1" }
+    ← { "kind": "session-queue", "sessionId": "session-abc", "items": [...], "requestId": "rq-1" }
+
+网关直接读取 Host 的 projections.values.inbox 生成 items；旧版 Host 没有该投影时返回空数组。
 ```
 
 - `session-queues.queues` 是全量快照，客户端必须整体替换所有 Session 的本地队列；快照里消失的 Session 也要清除。
