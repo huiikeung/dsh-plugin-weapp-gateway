@@ -4,7 +4,7 @@
 # Gateway and the `session/event` feed, and publishes no service of its own).
 - insert:
     - id: mobile-phone-tools
-      name: 'dsh-plugin-mobile-gateway/phone-tools'
+      name: 'dsh-plugin-weapp-gateway/phone-tools'
     - id: mobile-gateway
       name: 'dsh-plugin-weapp-gateway'
       config:

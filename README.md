@@ -11,6 +11,17 @@
 - 「兼容 App（备用）」的连接方式下拉与下方「配对入口」摘要卡片之间增加间距（16px），下拉不再紧贴提示卡片。
 - 摘要卡片的内边距、下方「配对入口地址」输入框与其余配对布局保持不变。
 - 全量测试通过。
+### v0.8.54 · 同步上游 0.12.1 新功能
+
+- **生图工具图片转发**（tool-result-images-v1）：`tool/result`、`tool/ptc-dispatch`、`tool/code-dispatch` 与会话历史快照携带生成图片附件元数据（PNG/JPEG/WebP/GIF，按附件 ID 去重），App 可直接展示生图结果；手机经控制连接 `attachment` 请求图片。
+- **DSH 0.2.2-rc.1/rc.3 协议支持**：宿主运行时版本探测、`session/control` 投影变更展平、`message-text` 文本段（textParts）、团队投影规范化（RC.3 无 members）、统一子代理控制接口（interruptByUser）。
+- **排程管理 v2**（schedule-management-v2）：schedule-create/edit/run/view/delete-inactive 完整模块，带严格参数校验、乐观并发（expectedUpdatedAt）与旧客户端兼容桥。
+- **手机连接器**（device-tools-v1）：日历/提醒/位置/照片/音乐/健康/闹钟七类原生能力。网关侧含设备权限持久化（devices 存储 v5）、`/mgw/devices/<id>/permissions` 路由、批量吊销 `POST /mgw/devices/revoke`、请求来源绑定（防伪造/串线）；Agent 侧经 `dsh-plugin-weapp-gateway/phone-tools` 插件行注入 phone_* 工具（需 App 实现「连接器」页）。
+- **Linux cloudflared 支持**：自动下载校验 Linux amd64/arm64 资产；原「Linux 不自动下载」的 fork 测试已被上游行为取代并移除。
+- **文件改动查询**（workspace-changes）：上游模块走宿主 `/api/changes.*` 只读路由；旧宿主退回原 bridge。
+- **管理页可靠性**：设备列表/状态读取去重与 5 秒超时、批量删除（勾选/全选）、设备权限页。
+- 可信设备行新增 `permissions` 字段；`agent-team-set-enabled` 开关；hello 能力新增 message-quotes-v1 / tool-result-images-v1 / agent-team-mode-v1 / schedule-management-v2 / plugin-updates-v1 / device-tools-v1。
+- 官方集成测试（test/*-official.test.mjs）需 DSH_INSTALL_ROOT，放 `npm run test:official`；React UI 测试放 `npm run test:ui`。
 ### v0.8.51 · 配对面板细节打磨
 
 - 小程序模块去掉「鲸尾公网 · 小程序 / 中继优先，局域网兜底」说明行（上方描述文案已含同样信息）。
