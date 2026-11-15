@@ -11,6 +11,11 @@
 - 「兼容 App（备用）」的连接方式下拉与下方「配对入口」摘要卡片之间增加间距（16px），下拉不再紧贴提示卡片。
 - 摘要卡片的内边距、下方「配对入口地址」输入框与其余配对布局保持不变。
 - 全量测试通过。
+### v0.8.56 · 修复「点击插件弹窗空白」
+
+- 修复 v0.8.54 整合时丢失的两个 fork 派生值：`visibleDevices` 与 `showAllDevices` 状态。有已配对设备时，设备列表渲染直接抛 `ReferenceError: visibleDevices is not defined`，整块弹窗白屏（设备为 0 时走另一分支才没暴露）。
+- 已用真实 `/mgw/status` + 23 台已配对设备的真实数据跑通完整面板渲染（97 节点），并核对全部 onClick/onChange 处理器与组件辅助函数均已定义。
+- 全量测试通过。
 ### v0.8.55 · 修复设置页无法加载（locale 注入缺失）
 
 - 修复 v0.8.54 引入的客户端加载失败：上游的语言同步 effect 引用了 `ctx.locale`，但 fork 未在 `inject` 里声明该服务，DSH 直接抛出 `cannot get property "locale" without inject`，整个客户端模块加载失败，设置页空白。
