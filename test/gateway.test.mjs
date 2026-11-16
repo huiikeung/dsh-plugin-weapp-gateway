@@ -7,7 +7,7 @@ const os = require('node:os')
 const path = require('node:path')
 const crypto = require('node:crypto')
 const plugin = (await import('../lib/index.mjs')).default
-const { handleQuery, setLogFile } = await import('../lib/index.mjs')
+const { admitMessage, handleQuery, setLogFile } = await import('../lib/index.mjs')
 // The direct handleQuery calls below never go through plugin.apply, so the
 // logFile option is not in play: redirect it explicitly instead of appending
 // to the operator's shared /tmp/mobile-gateway.log.
@@ -79,6 +79,19 @@ const assert = await import('node:assert/strict')
 
   const missing = await handleQuery(api, null, null, { type: 'session-queue' })
   assert.equal(missing.code, 'bad-request')
+}
+
+// Phone-source messages without a client requestId must still reach the host:
+// the gateway generates one for source admission, so the binding cannot be const.
+{
+  let prompted = null
+  const api = { sessions: { prompt: async (payload) => { prompted = payload; return { messageId: 'm-1' } } } }
+  const frame = await admitMessage(api, { type: 'message', sessionId: 's1', text: 'hi' }, null,
+    { gatewayId: 'gw-1', deviceId: 'dev-1' })
+  assert.equal(frame.kind, 'sent')
+  assert.equal(prompted.mode, 'queue')
+  assert.match(prompted.requestId, /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/)
+  assert.equal(prompted.content.at(-1).text, 'hi')
 }
 
 // Compact V4 history and reject stale/unversioned cursor coordinates before RPC.
