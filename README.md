@@ -6,6 +6,11 @@
 
 `dsh-plugin-weapp-gateway` · DeepSeek Harness 移动客户端连接插件
 
+### v0.8.59 · 修复 Tailscale 状态形状测试（套件回归）
+
+- v0.8.57 内嵌 `tailscale serve` 后，`GET /mgw/status` 的 `tailscale` 字段新增 `serveUrl` 与 `serve` 快照，但 `test/lan.test.mjs` 仍按旧的 `{addresses, urls}` 形状断言，导致全量测试变红（产品行为正确，测试过期）。
+- 测试改为校验新形状，并补断言 `serveUrl` 为字符串、`serve` 为对象；`npm test` 恢复全绿（19 个 node:test 文件 + 15 个测试链）。
+
 ### v0.8.52 · 兼容 App 下拉与方案摘要之间留出间距
 
 - 「兼容 App（备用）」的连接方式下拉与下方「配对入口」摘要卡片之间增加间距（16px），下拉不再紧贴提示卡片。
