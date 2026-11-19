@@ -6,6 +6,13 @@
 
 `dsh-plugin-weapp-gateway` · DeepSeek Harness 移动客户端连接插件
 
+### v0.8.60 · 同步上游 0.12.2（Linux 后台服务 + 健康摘要 v2）
+
+- **Linux 持久化后台运行**：通用设置新增开关（仅 Linux 且通过 `dsh web` 启动时显示）。开启后由 systemd 用户服务托管整个 DSH Web：SSH 断开继续运行、开机自启、异常退出自动重启（60 秒内最多 5 次）；写入 `0600` 启动快照与服务单元，服务名 `dsh-weapp-gateway-<id>.service`。关闭只取消自启，当前进程继续运行。后台托管时工具菜单的重启/停止改由 systemd 执行。
+- 管理接口：`GET /mgw/status` 增加 `backgroundService`；新增 `POST /mgw/background-service`（仅本机，交接时返回 202 并在短暂重连后由服务接管）；不支持环境返回 409 并说明原因（含 `sudo loginctl enable-linger <uid>` 提示）。
+- **健康摘要 v2**：`health.daily-summary` / `phone_health_daily_summary` 支持 `schemaVersion: 2` 的 13 项固定指标（步数、睡眠、步行跑步距离、楼层、活动/静息能量、运动时间、心率、静息心率、心率变异性 SDNN、血氧、呼吸频率、体重），逐项校验单位、聚合方式、数值范围、时间窗口与旧字段一致性；继续兼容旧版手机仅返回步数与睡眠。
+- **旧会话空预设修复**：`agentPreset: null`（未记录预设的历史会话）不再被判为状态不可用——查询成功、允许续聊、已开始会话仍拒绝切换；缺失字段与损坏值仍拒绝。
+- 新增 `test/background-service.test.mjs`，并补充 lan（状态形状 + 路由鉴权）、gateway（双通道空预设）、device-tools（健康 v2 正反例）、session-preset（空预设语义）测试；文档新增 `docs/linux-background-service.md`、`docs/health-summary.md`。全量测试通过。
 ### v0.8.59 · 修复 Tailscale 状态形状测试（套件回归）
 
 - v0.8.57 内嵌 `tailscale serve` 后，`GET /mgw/status` 的 `tailscale` 字段新增 `serveUrl` 与 `serve` 快照，但 `test/lan.test.mjs` 仍按旧的 `{addresses, urls}` 形状断言，导致全量测试变红（产品行为正确，测试过期）。

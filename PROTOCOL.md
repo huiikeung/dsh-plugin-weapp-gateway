@@ -125,7 +125,7 @@ const pairingText = Buffer.from(JSON.stringify(payload), 'utf8').toString('base6
 
 本机管理接口 `POST /mgw/gateway` 接受 `{"mode":"disabled|temporary|persistent"}` 中的一个具体值，例如 `{"mode":"persistent"}`。兼容旧 `{"enabled":true}`（临时开启）与 false（关闭）；不能同时传 `mode` 和 `enabled`。返回 `gatewayEnabled`、`gatewayMode`、`waitExpiresAt`、`connectedClients`。参数错误返回 400；保存失败返回 500 且不改变当前运行模式。
 
-`GET /mgw/status` 增加身份、地址列表及 `gatewayMode`。模式的持久化不影响配对码有效期和文件传输超时。自动超时关闭若遇到磁盘写入失败，会保持当前进程关闭并记录错误；重启可能仍按旧保存模式运行，需修复存储后再次保存选择。
+`GET /mgw/status` 增加身份、地址列表及 `gatewayMode`。Linux 上额外返回 `backgroundService`（`{ supported, available, enabled, managed, linger, unit, reason }`）：表示整个 DSH Web 是否由 systemd 用户服务托管。`POST /mgw/background-service`（仅本机管理面）接受 `{"enabled":boolean}`：开启时写入 `0600` 启动快照与服务单元、`enable` 并交接进程（`202`，当前进程随后退出，由服务接管）；关闭只执行 `disable`，当前进程继续运行。不支持的环境（非 Linux、非 `dsh web` 启动、无 systemd 用户服务）返回 `409` 与原因。后台托管时 `POST /mgw/tools/restart-web`、`/mgw/tools/stop-web` 改由 systemd 执行，避免停止后不再自动拉起。模式的持久化不影响配对码有效期和文件传输超时。自动超时关闭若遇到磁盘写入失败，会保持当前进程关闭并记录错误；重启可能仍按旧保存模式运行，需修复存储后再次保存选择。
 
 Windows/macOS PC 可从本机管理接口 `POST /mgw/cloudflare` 一键启用 Quick Tunnel：`{"enabled":true,"mode":"quick"}`，无需账户、域名或 Token；返回的随机公网地址在 `GET /mgw/status` 的 `cloudflare.publicUrl` 中，隧道重启后可能变化，App 需重新扫码确认。固定地址可用命名 Tunnel：`{"enabled":true,"mode":"named","hostname":"gateway.example.com","token":"<Tunnel Token>"}`；后续更新可省略 Token 或传空字符串以保留已保存的 Token，关闭时只需 `{"enabled":false}`。状态字段返回模式、支持状态、公开地址、本机入口端口、连接状态和错误，但绝不返回 Token。启用时网关自动切为常驻模式；配置与 Token 保存在独立的 `0600` 文件中。插件会在需要时下载并校验 Cloudflare 官方 `cloudflared` 二进制。两种模式仅在 `127.0.0.1:3082`（可配置）接受已鉴权的 `/ws/mobile` WebSocket，其他 HTTP 路径返回 404；网关关闭或插件卸载时该入口及受管进程一同停止。
 
@@ -1077,7 +1077,9 @@ WebUI 中的“任务”与“进行中的目标”分别对应 DSH 的 `todos` 
 | type | 参数 | 说明 |
 |---|---|---|
 | `agent-presets` | — | preset 名册（含 `isDefault` 标记） |
-| `session-agent-preset` | `sessionId`, `requestId?` | 读取当前会话的 `agentPreset` 和 `locked` |
+| `session-agent-preset` | `sessionId`, `requestId?` | 读取当前会话的 `agentPreset` 和 `locked`；成功响应可含 `agentPreset: null`（旧会话未记录预设），不代表查询失败 |
+
+健康摘要 `health.daily-summary` 继续使用带时区偏移的 `start` / `end` 与 IANA `timeZone`（最长 8 天）。旧手机会返回 `{ steps, sleepMinutes }`；`schemaVersion: 2` 的回包额外带实际查询的 `start`、`end` 与固定 `metrics`（13 项：步数、睡眠、步行跑步距离、楼层、活动/静息能量、运动时间、心率、静息心率、心率变异性、血氧、呼吸频率、体重），每项含 `value`（数字或 `null`）、`unit`、`aggregation`，体重另带窗口内 `recordedAt`。网关校验单位、聚合方式、数值范围、时间窗口与旧字段一致性后原样转发，绝不接受任意 HealthKit 记录或附加字段。详见 [健康摘要协议](docs/health-summary.md)。
 | `select-agent-preset` | `sessionId`, `agentPreset`, `requestId?` | 在首次对话前修改当前会话模式，保持 session ID |
 | `defaults` | — | 读取默认 Agent 预设、默认权限及动态可选默认权限（`permissionDefaultOptions`） |
 | `set-default` | `target`(agent-preset\|permission), `value` | 修改默认预设/默认权限（全局） |
