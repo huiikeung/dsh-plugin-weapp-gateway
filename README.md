@@ -6,6 +6,11 @@
 
 `dsh-plugin-weapp-gateway` · DeepSeek Harness 移动客户端连接插件
 
+### v0.8.61 · Quick Tunnel 自愈与 Tailscale Serve 进自动候选
+
+- **Cloudflare Quick Tunnel 定时自愈**：隧道在线后每 60 秒探测一次公网入口；`trycloudflare.com` 地址失效或不可达时自动重启 cloudflared，重新取得可用地址，避免手机拿着过期 URL 一直连不上。隧道进程退出时会清除定时器，重启后不会残留持有旧进程句柄的检查（否则新隧道不可达时无法触发重启）。
+- **auto 配对路线纳入 Tailscale Serve**：`tailscale serve` 已就绪时，其 `wss://<node>.<tailnet>.ts.net/ws/mobile` 会作为公网候选一并写进配对载荷（与 Cloudflare 并存），客户端按自身优先级选路；两条公网通道可同时开启，互不影响。
+- 全量测试通过（20 个 node:test 文件 + 15 个测试链）。
 ### v0.8.60 · 同步上游 0.12.2（Linux 后台服务 + 健康摘要 v2）
 
 - **Linux 持久化后台运行**：通用设置新增开关（仅 Linux 且通过 `dsh web` 启动时显示）。开启后由 systemd 用户服务托管整个 DSH Web：SSH 断开继续运行、开机自启、异常退出自动重启（60 秒内最多 5 次）；写入 `0600` 启动快照与服务单元，服务名 `dsh-weapp-gateway-<id>.service`。关闭只取消自启，当前进程继续运行。后台托管时工具菜单的重启/停止改由 systemd 执行。
