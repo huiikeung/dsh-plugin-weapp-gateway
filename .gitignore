@@ -6,6 +6,9 @@ node_modules/
 .DS_Store
 .npmrc
 
+# 构建产物：helper 二进制按平台由 helper/tsnet-node/build.sh 生成
+helper/tsnet-node/bin/
+
 # backups / scratch
 *.bak
 *.orig
