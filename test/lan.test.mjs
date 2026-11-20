@@ -149,11 +149,13 @@ async function waitForLanStatus(base) {
     assert.equal(response.status, expected)
   }
   // Tailscale 地址由本机接口探测，只保证字段形状；本机没有 Tailscale 时为空数组。
-  // 0.8.57 起内嵌 tailscale serve，状态额外带 serveUrl 与 serve 快照。
-  assert.deepEqual(Object.keys(status.tailscale).sort(), ['addresses', 'serve', 'serveUrl', 'urls'])
+  // 0.8.57 起内嵌 tailscale serve；0.8.62 起同时暴露节点来源与节点快照（node/nodeSource）。
+  assert.deepEqual(Object.keys(status.tailscale).sort(), ['addresses', 'node', 'nodeSource', 'serve', 'serveUrl', 'urls'])
   assert.ok(Array.isArray(status.tailscale.addresses) && Array.isArray(status.tailscale.urls))
   assert.equal(typeof status.tailscale.serveUrl, 'string')
   assert.equal(typeof status.tailscale.serve, 'object')
+  assert.equal(typeof status.tailscale.node, 'object')
+  assert.ok(['system', 'embedded', 'none'].includes(status.tailscale.nodeSource))
   assert.ok(status.tailscale.urls.every((url) => url.startsWith('ws://') && url.endsWith('/ws/mobile')))
   for (const action of ['restart-web', 'stop-web']) {
     const unavailable = await fetch(`${base}/mgw/tools/${action}`, {

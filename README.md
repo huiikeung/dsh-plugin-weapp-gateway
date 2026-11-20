@@ -6,6 +6,13 @@
 
 `dsh-plugin-weapp-gateway` · DeepSeek Harness 移动客户端连接插件
 
+### v0.8.62 · Tailscale 内嵌节点（tsnet）与面板重排
+
+- **系统 Tailscale 优先 + 自研轻量节点兜底**：`tailscaleMode` 支持 `auto`（默认）/ `system` / `embedded` / `off`。检测到本机 Tailscale 地址就用系统节点、不启动任何进程；否则在配置了 Auth Key 或显式 `embedded` 时启动 `helper/tsnet-node`（Go + tsnet 1.104.5）轻量节点——不占系统 VPN/TUN、不需要管理员权限，支持自填 Auth Key 或登录链接授权，控制平面可指向自建 Headscale。
+- 面板「Tailscale」区域重排：直接显示「等待授权 / 去授权」并支持在面板填写 Auth Key 连接；「启动隧道」强制走内嵌节点并暴露登录链接；节点名默认带平台（win/mac/linux）、AuthKey 输入框自动补 `-ak` 且可自定义；三个操作按钮同一行、输入框与按钮统一 34px 高度右对齐；状态不再在「等待授权 / 已授权」之间闪烁（只有节点 Running 才暴露 `serveUrl`）。
+- `GET /mgw/status` 的 `tailscale` 新增 `node`（节点快照）与 `nodeSource`（system/embedded/none），`serveUrl` 仅在节点 Running 时返回；新增 `GET /mgw/tailscale/login`（302 到登录链接）。
+- 修复 `test/lan.test.mjs` 对 `tailscale` 字段形状的过期断言（补齐 `node`/`nodeSource`），全量测试恢复全绿（20 个 node:test 文件 + 15 个测试链）。
+- 新增文档 `docs/tailscale-node.md` 与 `helper/tsnet-node/`（Go 源码 + 构建脚本，产物目录已忽略）。
 ### v0.8.61 · Quick Tunnel 自愈与 Tailscale Serve 进自动候选
 
 - **Cloudflare Quick Tunnel 定时自愈**：隧道在线后每 60 秒探测一次公网入口；`trycloudflare.com` 地址失效或不可达时自动重启 cloudflared，重新取得可用地址，避免手机拿着过期 URL 一直连不上。隧道进程退出时会清除定时器，重启后不会残留持有旧进程句柄的检查（否则新隧道不可达时无法触发重启）。
