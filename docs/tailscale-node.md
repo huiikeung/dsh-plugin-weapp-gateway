@@ -20,6 +20,20 @@
   - tailnet 监听 3081 并转发到本机网关，配对入口是 `ws://100.x.x.x:3081/ws/mobile`；
     可选 `--https-port` 走 ts.net 证书提供 `wss://<node>.<tailnet>.ts.net`。
 
+## 用户授权的两种方式（与手机端一致）
+
+1. **浏览器登录（推荐给普通用户）**
+   面板 Tailscale 区域点「启动隧道」→ 插件在无系统 Tailscale 时自动 spawn 内嵌节点 →
+   约 10–20 秒后状态变为「内嵌隧道需要授权」，出现「去授权」按钮 →
+   浏览器打开登录链接完成授权（`GET /mgw/tailscale/login` 302 到该链接）。
+   授权后节点自动 Running，地址 `ws://100.x:3081/ws/mobile` 自动填入。
+2. **Auth Key（免浏览器、可无人值守）**
+   在插件设置里填用户自己在 `login.tailscale.com/admin/settings/keys` 生成的
+   `tskey-auth-…`（`tailscaleAuthKey`），再点「启动隧道」，内嵌节点会带 key 直接加入 tailnet。
+
+两种方式都只使用**用户自己**的 Tailscale 账号；插件不内置任何共享节点或凭据。
+已有登录态（`~/.dsh/tailscale/tailscaled.state`）时，DSH 重启后 `auto` 模式会自动恢复内嵌节点。
+
 ## 插件设置
 
 | 设置 | 默认 | 说明 |
