@@ -6,6 +6,10 @@
 
 `dsh-plugin-weapp-gateway` · DeepSeek Harness 移动客户端连接插件
 
+### v0.8.65 · 版本号与远端 tag 对齐
+
+- 远端已有 v0.8.62/63/64 三个 tag（Tailscale 迭代），但 `package.json` 仍停在 0.8.61；本版把版本号推进到 0.8.65 并补发 npm，避免 tag 与包版本错位。内容与 v0.8.62 发布说明一致（Tailscale 内嵌节点 + 面板重排 + lan 测试修正）。
+
 ### v0.8.62 · Tailscale 内嵌节点（tsnet）与面板重排
 
 - **系统 Tailscale 优先 + 自研轻量节点兜底**：`tailscaleMode` 支持 `auto`（默认）/ `system` / `embedded` / `off`。检测到本机 Tailscale 地址就用系统节点、不启动任何进程；否则在配置了 Auth Key 或显式 `embedded` 时启动 `helper/tsnet-node`（Go + tsnet 1.104.5）轻量节点——不占系统 VPN/TUN、不需要管理员权限，支持自填 Auth Key 或登录链接授权，控制平面可指向自建 Headscale。
