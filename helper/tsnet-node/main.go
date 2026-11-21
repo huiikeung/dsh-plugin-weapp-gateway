@@ -56,6 +56,8 @@ var (
 	targetPort  = flag.Int("target-port", 0, "转发目标端口，0 表示与 listen-port 相同（本机 127.0.0.1）")
 	httpsPort   = flag.Int("https-port", 0, "可选：ts.net HTTPS 监听端口（wss 入口），0 关闭")
 	statusPath  = flag.String("status-file", "", "状态文件路径，默认 <state-dir>/embedded-node.json")
+	proxyAddr   = flag.String("proxy", "", "HTTP/SOCKS5 proxy for control plane (empty = auto detect)")
+	proxyAutoFlag = flag.Bool("proxy-auto", true, "auto detect local proxy ports when --proxy is empty")
 	verbose     = flag.Bool("verbose", false, "输出 tsnet 详细日志")
 	statusMu    sync.Mutex
 	current     = statusFile{Schema: schemaVersion, State: "starting"}
@@ -242,8 +244,99 @@ func pollLoop(ctx context.Context, srv *tsnet.Server) {
 	}
 }
 
+// ---------- 本机代理自动探测 ----------
+// tsnet 的控制面/DERP 连接不读系统代理，fake-ip 代理环境下必须显式给 HTTP(S)_PROXY。
+// 不同代理软件的端口不一样（Clash 7897/7890、V2Ray 1080/10808、Surge 6152…），
+// 这里按常见端口逐个探测，谁能代理到控制面就用谁。
+
+var proxyPorts = []int{
+	7897, 7890, 7891, 7892, 7893, 7899,
+	1080, 1081, 1087, 10808, 10809, 10810,
+	6152, 6153, 8118, 8080, 8081, 8888, 8889,
+	20171, 20172, 20170, 9090,
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
+}
+
+func probeHTTPProxy(port int) bool {
+	addr := fmt.Sprintf("127.0.0.1:%d", port)
+	conn, err := net.DialTimeout("tcp", addr, 250*time.Millisecond)
+	if err != nil {
+		return false
+	}
+	defer conn.Close()
+	_ = conn.SetDeadline(time.Now().Add(1500 * time.Millisecond))
+	req := "CONNECT controlplane.tailscale.com:443 HTTP/1.1\r\nHost: controlplane.tailscale.com:443\r\nProxy-Connection: keep-alive\r\n\r\n"
+	if _, err := conn.Write([]byte(req)); err != nil {
+		return false
+	}
+	buf := make([]byte, 96)
+	n, err := conn.Read(buf)
+	if err != nil || n <= 0 {
+		return false
+	}
+	head := string(buf[:n])
+	return strings.HasPrefix(head, "HTTP/1.") && strings.Contains(head, " 200")
+}
+
+func probeSOCKS5(port int) bool {
+	addr := fmt.Sprintf("127.0.0.1:%d", port)
+	conn, err := net.DialTimeout("tcp", addr, 250*time.Millisecond)
+	if err != nil {
+		return false
+	}
+	defer conn.Close()
+	_ = conn.SetDeadline(time.Now().Add(1200 * time.Millisecond))
+	if _, err := conn.Write([]byte{0x05, 0x01, 0x00}); err != nil {
+		return false
+	}
+	buf := make([]byte, 2)
+	if _, err := io.ReadFull(conn, buf); err != nil {
+		return false
+	}
+	return buf[0] == 0x05 && buf[1] == 0x00
+}
+
+func detectProxy() string {
+	for _, port := range proxyPorts {
+		if probeHTTPProxy(port) {
+			return fmt.Sprintf("http://127.0.0.1:%d", port)
+		}
+	}
+	for _, port := range proxyPorts {
+		if probeSOCKS5(port) {
+			return fmt.Sprintf("socks5://127.0.0.1:%d", port)
+		}
+	}
+	return ""
+}
+
+func applyProxyEnv(proxy string) {
+	if proxy == "" {
+		return
+	}
+	for _, key := range []string{"HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy", "ALL_PROXY", "all_proxy"} {
+		_ = os.Setenv(key, proxy)
+	}
+	logf("proxy: using %s", proxy)
+}
+
 func main() {
 	flag.Parse()
+	// 显式代理优先；否则自动探测常见端口（也可以用 HTTPS_PROXY 环境变量覆盖）。
+	explicitProxy := firstNonEmpty(*proxyAddr, os.Getenv("HTTPS_PROXY"), os.Getenv("https_proxy"), os.Getenv("ALL_PROXY"), os.Getenv("all_proxy"))
+	if explicitProxy != "" {
+		applyProxyEnv(explicitProxy)
+	} else if *proxyAutoFlag {
+		applyProxyEnv(detectProxy())
+	}
 	if *stateDir == "" {
 		logf("-state-dir is required")
 		os.Exit(2)
