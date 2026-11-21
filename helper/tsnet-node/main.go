@@ -349,6 +349,45 @@ func applyProxyEnv(proxy string) {
 	logf("proxy: using %s", proxy)
 }
 
+// 单实例锁：同一个状态目录只允许一个节点进程。
+// 两个进程共用一份 node key 会被 Tailscale 判为 "Duplicate node key"，
+// 表现为控制台红标 + 手机间歇性连不上。
+func acquireInstanceLock(stateDir string) (func(), error) {
+	lockPath := filepath.Join(stateDir, "helper.lock")
+	for attempt := 0; attempt < 2; attempt++ {
+		f, err := os.OpenFile(lockPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+		if err == nil {
+			_, _ = f.WriteString(fmt.Sprintf("%d\n", os.Getpid()))
+			_ = f.Close()
+			return func() { _ = os.Remove(lockPath) }, nil
+		}
+		// 已有锁：看 PID 是否还活着；死进程留下的锁直接接管
+		data, readErr := os.ReadFile(lockPath)
+		if readErr != nil {
+			return nil, err
+		}
+		pid := strings.TrimSpace(string(data))
+		if pid != "" {
+			if proc, perr := os.FindProcess(atoiSafe(pid)); perr == nil && proc.Signal(syscall.Signal(0)) == nil {
+				return nil, fmt.Errorf("another dsh-tailscale-node is already running (pid %s) for %s", pid, stateDir)
+			}
+		}
+		_ = os.Remove(lockPath)
+	}
+	return nil, fmt.Errorf("could not acquire instance lock in %s", stateDir)
+}
+
+func atoiSafe(text string) int {
+	value := 0
+	for _, ch := range text {
+		if ch < '0' || ch > '9' {
+			return value
+		}
+		value = value*10 + int(ch-'0')
+	}
+	return value
+}
+
 func main() {
 	flag.Parse()
 	// 显式代理优先；否则自动探测常见端口（也可以用 HTTPS_PROXY 环境变量覆盖）。
@@ -373,6 +412,12 @@ func main() {
 		logf("mkdir state dir: %v", err)
 		os.Exit(2)
 	}
+	releaseLock, lockErr := acquireInstanceLock(*stateDir)
+	if lockErr != nil {
+		logf("instance lock: %v", lockErr)
+		os.Exit(3)
+	}
+	defer releaseLock()
 	authMode := "login"
 	if strings.TrimSpace(*authKey) != "" {
 		authMode = "authkey"
