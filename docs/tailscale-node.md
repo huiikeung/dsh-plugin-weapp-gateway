@@ -81,6 +81,25 @@
   - Cloudflare / 局域网地址（如已开启）
 - 手机端扫一次码即可；之后重启 App 会自动重连，不需要再扫码。
 
+### 本机有代理（Clash / Surge / fake-ip TUN）时
+
+tsnet 的控制面（`controlplane.tailscale.com`）和日志上报走的是独立连接，**不会自动走系统代理**，
+在 fake-ip 代理环境下会表现为节点一直 `Starting`，日志里是：
+
+```
+control: TryLogin: register request: Post "https://controlplane.tailscale.com/machine/register": context deadline exceeded
+logtail: dial "log.tailscale.com:443" failed: dial tcp 198.18.x.x:443: i/o timeout
+```
+
+解决办法：配置插件的 `tailscaleProxy` 指向本机 HTTP 代理端口（Clash Verge 默认是 7897）：
+
+```yaml
+tailscaleProxy: http://127.0.0.1:7897
+```
+
+插件 spawn helper 时会把它注入 `HTTP_PROXY/HTTPS_PROXY/ALL_PROXY`，节点即可完成注册并给出登录链接。
+未显式配置时也会读取环境变量 `HTTPS_PROXY`。
+
 ### 常见问题
 
 | 现象 | 原因 / 处理 |
