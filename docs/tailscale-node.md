@@ -51,3 +51,46 @@
 `/mgw/status` 的 `tailscale` 字段包含 `nodeSource`（system / embedded / none）与 `serve`
 快照（state、loginUrl、dnsName、ipv4、urls、error）。`GET /mgw/tailscale` 返回同一快照，
 `GET /mgw/tailscale/login` 302 到登录链接。
+
+## 安装与首次授权（用户指引）
+
+> 普通用户从安装插件到手机连上，一共 3 步；只有**第一次**需要授权，之后节点身份保存在本地状态目录里，重启/升级插件都不用再授权。
+
+### 第 1 步：安装插件后重启 DSH
+
+插件在 **DSH 启动时加载**，所以：
+
+- 新装插件 → 必须重启一次 DSH，面板里才会出现 Tailscale 卡片；
+- 升级插件（覆盖安装）→ 也建议重启一次，确保新的 helper 被识别。
+
+重启后打开面板，看到 `Tailscale` 区域即为生效。
+
+### 第 2 步：启动节点并授权（二选一）
+
+| 方式 | 适用 | 操作 |
+|---|---|---|
+| **浏览器登录**（推荐） | 有显示器、能开浏览器 | 面板点「启动隧道」→ 等 10–20 秒状态变成「需要授权」→ 点「去授权」→ 在弹出的 Tailscale 页面登录并允许 |
+| **Auth Key** | 无头服务器 / 无人值守 | 在 Tailscale 管理台生成 Auth Key（建议 reusable）→ 填到面板的 Auth Key 输入框 → 点「连接」 |
+
+授权成功后状态变为 `Running`，面板会显示节点名与 `wss://<节点>.<tailnet>.ts.net` 地址。
+
+### 第 3 步：手机扫码配对
+
+- Tailscale 就绪后，配对二维码里会**同时**包含：
+  - `wss://<节点>.<tailnet>.ts.net/ws/mobile`（Tailscale，公网可用、仅 tailnet 内可达）
+  - Cloudflare / 局域网地址（如已开启）
+- 手机端扫一次码即可；之后重启 App 会自动重连，不需要再扫码。
+
+### 常见问题
+
+| 现象 | 原因 / 处理 |
+|---|---|
+| 状态 `Failed`，错误 `tailscale helper not found` | 插件包缺少对应平台的 helper 二进制：确认 `helper/tsnet-node/bin/<os>-<arch>/dsh-tailscale-node` 存在；源码包可用 `GO_BIN=/path/to/go bash helper/tsnet-node/build.sh` 自行构建 |
+| 一直停在「需要授权」 | 浏览器授权没完成；重开「去授权」链接，或改用 Auth Key |
+| 授权后手机仍连不上 ts.net | 检查手机端 Tailscale 是否登录**同一个 tailnet**；不同 tailnet 无法互通 |
+| 卸载重装插件后要重新授权吗 | 不需要：节点状态在插件的状态目录里；只有手动清空状态目录才需要重新授权 |
+
+### 支持的 helper 平台
+
+插件包内置：`darwin-arm64`、`linux-amd64`、`linux-arm64`、`windows-amd64`。
+其他平台请用源码自行构建。

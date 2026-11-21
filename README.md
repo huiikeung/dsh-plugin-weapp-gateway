@@ -328,6 +328,20 @@ DeepSeek Harness 的设备鉴权移动连接插件，支持会话与实时事件
 >
 > v0.7.2：新增独立对话/控制连接、空 Session 创建、停止生成与稍后继续、排队消息同步及编辑/删除/Steer，以及 Session 归档和重命名的双向同步。
 
+
+## 首次使用（安装 → 授权 → 扫码）
+
+1. **安装/升级插件后重启 DSH**（插件在 DSH 启动时加载，否则面板里看不到 Tailscale 卡片）。
+2. 面板 → Tailscale → 点「启动隧道」：
+   - 有系统 Tailscale 会直接复用；
+   - 没有则自动启动内嵌轻量节点（无需管理员权限、不占系统 VPN），10–20 秒后变成「需要授权」；
+   - 点「去授权」在浏览器登录自己的 Tailscale 账号；无头机器可改填 Auth Key。
+3. 节点 Running 后重新生成配对二维码 → 手机扫一次即可。二维码会同时带上
+   `wss://<节点>.<tailnet>.ts.net`、Cloudflare、局域网等候选地址，客户端按网关下发的顺序选路。
+
+> 只有第一次需要授权，之后重启 DSH / 升级插件都不用再来一遍。详见 [docs/tailscale-node.md](docs/tailscale-node.md)。
+
+
 ## 协议与 DSH 兼容层
 
 移动端连接的是本项目维护的 `dsh-mobile-v1`，不是 DSH 的内部 Remote 协议。当前 Host Adapter 基线为 DSH 0.2.1-rc.2 / Session format 4；Session、Workspace、Settings、Commands、Goals、Schedule、Permission Presets 与新增上传/子会话路由的 Remote 参数只存在于适配层。旧 Host 不满足本版硬依赖时不能加载此版插件；移动端新增功能仍需按 `hello.capabilities` 判定是否启用。Plugin Manager 系列请求帧经配对设备连接管理插件目录、安装、启停、设置与版本豁免，方案见 [DSH 0.2.0 插件管理对接方案](docs/dsh-0.2.0-rc.2-plugin-management-mobile-integration.md)。模型配置请求（`llm-discover-models`、`model-credential-describe`、`model-credential-set`）同样走配对设备控制连接，转发 Host `llm/discoverModels` 与 `credentials/describe|set`；凭据值只上行，响应与日志都不回显，见 [PROTOCOL.md 第 8 节](PROTOCOL.md#模型发现与模型凭据llm-model-config-v1)。
