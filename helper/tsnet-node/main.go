@@ -42,6 +42,7 @@ type statusFile struct {
 	ListenPort int    `json:"listenPort"`
 	HTTPSPort  int    `json:"httpsPort"`
 	HTTPSUrl   string `json:"httpsUrl"`
+	HTTPSError string `json:"httpsError,omitempty"`
 	Hostname   string `json:"hostname"`
 	ControlURL string `json:"controlUrl"`
 	UpdatedAt  int64  `json:"updatedAt"`
@@ -165,14 +166,7 @@ func startListeners(srv *tsnet.Server) {
 	})
 	if *httpsPort > 0 {
 		httpsOnce.Do(func() {
-			listener, err := srv.ListenTLS("tcp", fmt.Sprintf(":%d", *httpsPort))
-			if err != nil {
-				httpsErr.Store(err.Error())
-				logf("ts.net ListenTLS :%d failed: %v", *httpsPort, err)
-				return
-			}
-			logf("ts.net TLS listener ready on :%d -> %s", *httpsPort, target)
-			go serveListener(listener, target)
+			go startTLSListener(srv, target, context.Background())
 		})
 	}
 	statusMu.Lock()
@@ -183,6 +177,33 @@ func startListeners(srv *tsnet.Server) {
 	}
 	statusMu.Unlock()
 	writeStatus()
+}
+
+// TLS(443) 监听：证书由 Tailscale 控制面按需签发，刚登录时可能还取不到，
+// 因此失败后要重试，而不是一次性放弃（否则 httpsUrl 永远为空）。
+func startTLSListener(srv *tsnet.Server, target string, ctx context.Context) {
+	for attempt := 1; attempt <= 30; attempt++ {
+		listener, err := srv.ListenTLS("tcp", fmt.Sprintf(":%d", *httpsPort))
+		if err == nil {
+			statusMu.Lock()
+			current.HTTPSError = ""
+			statusMu.Unlock()
+			logf("ts.net TLS listener ready on :%d -> %s", *httpsPort, target)
+			writeStatus()
+			serveListener(listener, target)
+			return
+		}
+		statusMu.Lock()
+		current.HTTPSError = err.Error()
+		statusMu.Unlock()
+		writeStatus()
+		logf("ts.net ListenTLS :%d failed (attempt %d/30): %v", *httpsPort, attempt, err)
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(5 * time.Second):
+		}
+	}
 }
 
 func pollLoop(ctx context.Context, srv *tsnet.Server) {
