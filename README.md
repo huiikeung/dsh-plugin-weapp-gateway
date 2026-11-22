@@ -6,6 +6,14 @@
 
 `dsh-plugin-weapp-gateway` · DeepSeek Harness 移动客户端连接插件
 
+### v0.8.66 · 内嵌节点代理、HTTPS 与单实例稳定性
+
+- **内嵌节点支持 HTTP 代理**：`tailscaleProxy` 可显式指定本机代理，设为 `off` 可彻底关闭探测；未配置时自动探测本机 24 个常见 HTTP CONNECT / SOCKS5 端口，适配 fake-ip 代理环境（如 Clash）。配置说明见 [docs/tailscale-node.md](docs/tailscale-node.md)。
+- **443/wss 与 TLS 重试**：新增 `tailscaleHttps` 开关（默认开），关闭后只提供 tailnet 内的 ws 地址；TLS(443) 监听失败会重试，并在状态中暴露 `httpsError`，避免证书签发滞后时静默不可用。
+- **单实例与自动重拉**：helper 改用 flock 单实例锁（进程被 SIGKILL 自动释放），并复核 pid 存活、异常退出自动重拉，修复同 key 双进程触发 Duplicate node key 的问题；内嵌节点使用独立状态目录，配对载荷纳入配置入口。
+- **依赖升级**：内嵌 tsnet 升级到 tailscale.com v1.104.7。
+- 新增「首次使用（安装 → 授权 → 扫码）」章节与内嵌节点安装/授权指引。
+
 ### v0.8.65 · 版本号与远端 tag 对齐
 
 - 远端已有 v0.8.62/63/64 三个 tag（Tailscale 迭代），但 `package.json` 仍停在 0.8.61；本版把版本号推进到 0.8.65 并补发 npm，避免 tag 与包版本错位。内容与 v0.8.62 发布说明一致（Tailscale 内嵌节点 + 面板重排 + lan 测试修正）。
