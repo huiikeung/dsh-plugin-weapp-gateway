@@ -6,6 +6,11 @@
 
 `dsh-plugin-weapp-gateway` · DeepSeek Harness 移动客户端连接插件
 
+### v0.8.67 · ClawBot 提交即时回执
+
+- 微信 ClawBot 命令通过准入检查、提交到会话后，先回一条「已收到，正在执行；完成后把结果发给你」，避免长任务期间用户误以为微信没有反应；最终结果仍在整轮结束后发送。
+- 回执复用既有 receipt 机制并受上限约束，发送失败不影响主流程。
+
 ### v0.8.66 · 内嵌节点代理、HTTPS 与单实例稳定性
 
 - **内嵌节点支持 HTTP 代理**：`tailscaleProxy` 可显式指定本机代理，设为 `off` 可彻底关闭探测；未配置时自动探测本机 24 个常见 HTTP CONNECT / SOCKS5 端口，适配 fake-ip 代理环境（如 Clash）。配置说明见 [docs/tailscale-node.md](docs/tailscale-node.md)。
