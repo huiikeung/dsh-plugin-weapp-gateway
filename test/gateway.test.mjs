@@ -735,9 +735,9 @@ function waitFor(pred, timeout) { return new Promise((res) => { const t0 = Date.
       assert.equal(controls.find(f => f.kind === 'hello').capabilities.includes('file-references-v1'), true)
       assert.equal(controls.find(f => f.kind === 'hello').capabilities.includes('file-upload-v1'), false,
         'file upload is advertised only when the Host exposes its official streaming route')
-      // The current Host baseline is DSH 0.2.1-rc.2; mobile wire protocol stays
-      // still advertised (the panel degrades gracefully on older hosts).
-      assert.equal(controls.find(f => f.kind === 'hello').dshVersion, '0.2.1-rc.2')
+      // hello reports the probed DSH runtime version; when the probe is
+      // unavailable (plain Node test process) the current fallback is used.
+      assert.equal(controls.find(f => f.kind === 'hello').dshVersion, '0.2.2-rc.3')
       control.send(JSON.stringify({ type: 'plugin-catalog', requestId: 'unauthenticated-catalog' }))
       assert.equal(await waitFor(() => controls.some(f => f.requestId === 'unauthenticated-catalog'), 2000), true)
       assert.equal(controls.find(f => f.requestId === 'unauthenticated-catalog').code, 'authentication-required')
