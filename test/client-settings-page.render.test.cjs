@@ -16,6 +16,8 @@ const fs = require('fs')
 // graph; this is only for server-rendering the tree under Node.
 const WORKSPACE = '/vol1/1000/Deepseek-Harness/工作台/插件'
 const REACT_CANDIDATES = [
+  // Repo-local install (npm install --no-save react react-dom) works anywhere.
+  path.join(__dirname, '..', 'node_modules'),
   '/vol1/@appdata/deepseek.harness/dsh-data/profiles/web/node_modules',
   path.join(WORKSPACE, 'dsh-session-compactor/node_modules'),
   path.join(WORKSPACE, 'dsh-interactive-reader/node_modules'),
@@ -77,6 +79,8 @@ function check(ok, what) {
 
 // ---------------------------------------------------------------- registration
 const registrations = []
+// Upstream 0.10.1 mounts the panel stylesheet via ctx.effect; ignore it headless.
+const noEffect = () => () => {}
 const slots = {
   inject: (name, thunk) => { thunk() },
   register: (options, component) => {
@@ -91,8 +95,14 @@ const exported = loadBundle(React).factory((id) => {
 
 console.log('=== registration ===')
 check(JSON.stringify(exported.inject) === '["slots"]', `inject = ["slots"] (got ${JSON.stringify(exported.inject)})`)
-exported.apply({ slots })
-check(registrations.length === 3, `three slot registrations: settings + sidebar + overlay (got ${registrations.length})`)
+// Upstream 0.10.1: the panel stylesheet mounts through ctx.effect; keep the
+// harness headless by ignoring the factory (document is undefined here).
+const ctxEffects = []
+exported.apply({ slots, effect: (fn, label) => { ctxEffects.push(label); return () => {} } })
+check(ctxEffects.includes('mobile-gateway: panel styles'), 'panel styles mount through ctx.effect')
+check(registrations.length === 5, `five slot registrations: settings + panellist + main + sidebar + overlay (got ${registrations.length})`)
+check(registrations.some((r) => r.options.name === 'sidebar.panellist' && r.options.id === 'mobile-gateway-panel'), 'plugins-area icon registered by default (pluginsEntry defaults on)')
+check(registrations.some((r) => r.options.name === 'main' && r.options.key === 'mobile-gateway-panel'), 'central panel content registered under the same key')
 const sectionReg = registrations.find((r) => r.options.name === 'settings.section')
 const sidebarReg = registrations.find((r) => r.options.name === 'sidebar.footer.action')
 const overlayReg = registrations.find((r) => r.options.name === 'shell.overlay')
@@ -117,7 +127,7 @@ const entryExported = loadBundle(React).factory((id) => {
   if (id === 'react') return React
   throw new Error(`unexpected require: ${id}`)
 })
-entryExported.apply({ slots: { inject: (n, t) => t(), register: (o, c) => { entryRegistrations.push({ options: o, component: c }); return () => {} } } })
+entryExported.apply({ slots: { inject: (n, t) => t(), register: (o, c) => { entryRegistrations.push({ options: o, component: c }); return () => {} } }, effect: noEffect })
 check(entryRegistrations.some((r) => r.options.name === 'settings.section' && r.options.id === 'mobile-gateway'),
   'the entry keeps the settings.section registration')
 check(entryRegistrations.some((r) => r.options.name === 'sidebar.footer.action')
@@ -127,8 +137,9 @@ check(src.includes('React.useEffect(() => { setOpen(true) }, [])'),
   'the settings section opens the dialog on mount (no intermediate card)')
 check(src.includes('apiPath') && src.includes('document.baseURI'),
   'management RPC resolves against the document base (fnOS gateway prefix safe)')
-check(src.includes("route: pairingRoute") && src.includes('lanUrl: lanPairingUrl(status)'),
-  'pairing request carries the selected route and local-LAN fallback endpoint')
+check(src.includes('route: appRoute') && src.includes("route: 'mini'")
+  && src.includes('lanUrl: lanPairingUrl(status)'),
+  'pairing requests carry the selected route (app select / mini fixed) and the local-LAN fallback endpoint')
 
 // ------------------------------------------------------------- render A: initial
 console.log('\n=== render A: initial (loading) state ===')
@@ -143,9 +154,12 @@ for (const [needle, what] of [
   ['设备鉴权', 'auth row'],
   ['可信设备', 'trusted devices group'],
   ['网络检测', 'network diagnostics nav section'],
-  ['在左侧栏显示入口', 'sidebar entry toggle card rendered'],
+  ['左侧栏显示入口', 'entry master toggle card rendered'],
   ['aria-label="工具"', 'tools gear button rendered (menu opens on click)'],
 ]) check(htmlA.includes(needle), what)
+// 子设置默认折叠：总开关卡片在，但两个子开关行不渲染。
+check(!htmlA.includes('侧边栏底部入口') && !htmlA.includes('侧边栏入口位置'),
+  'the sub toggles stay folded by default until the master row is clicked')
 check(!htmlA.includes('安装应用'), 'install guide section is gone (not needed for now)')
 check(!htmlA.includes('正在检查系统组件…'), 'public access stays hidden while status is loading')
 check(htmlA.includes('配对入口地址（手机需能访问）'), 'the unified pairing address field is rendered')
@@ -153,13 +167,19 @@ check(htmlA.includes('配对入口地址（手机需能访问）'), 'the unified
 // ---------------------------------------------------------- render B: populated
 console.log('\n=== render B: populated state ===')
 const seeds = [
-  'general',                                                                                 // activeSection
-  [                                                                                          // devices
+  'general',                                                                  // #0 activeSection
+  false,                                                                      // #1 pairingSubOpen (fold state, default folded)
+  true,                                                                       // #2 entrySubOpen (fold state)
+  [
     { id: 'd1', name: 'My Phone', displayName: 'My Phone (2)', online: true, connections: 2, routes: ['lan', 'public'], lastSeenAt: 1758000000000 },
     { id: 'd2', name: 'My Phone', displayName: 'My Phone (1)', online: false, connections: 0, routes: [], lastSeenAt: 1757900000000 },
-  ],
-  false,                                                                                     // showAllDevices
-  {                                                                                          // status
+  ],                                                        // #3 devices
+  null,                                                                       // #4 deviceLoadError
+  null,                                                                       // #5 statusLoadError
+  false,                                                                      // #6 showAllDevices
+  null,                                                                       // #7 permissionSaving
+  () => new Set(),                                                            // #8 selectedDeviceIds
+  {
     gatewayEnabled: true, gatewayMode: 'persistent', gatewayId: '9f1c-uuid', gatewayName: '家里电脑',
     requireAuth: true, version: '0.8.5', webPort: 2298, wsPath: '/ws/mobile', publicUrl: '', gatewayInstanceId: 'gi-abc',
     platform: 'linux', webPid: 4321,
@@ -173,38 +193,48 @@ const seeds = [
     },
     endpoints: ['ws://192.168.3.110:3081/ws/mobile'],
     lan: { enabled: true, listening: true, urls: ['ws://192.168.3.110:3081/ws/mobile'], port: 3081 },
-  },
-  null,                                                                                      // dismissedNotice
-  'ws://192.168.3.110:3081/ws/mobile',                                                       // publicUrl
-  'auto',                                                                                    // appRoute
-  false,                                                                                     // connectionHelpOpen
-  false,                                                                                     // toolsOpen
-  false,                                                                                     // toolBusy
-  '',                                                                                        // toolNotice
-  '203.0.113.10',                                                                            // publicIp
-  { installed: true, configured: true, backendPort: 2298, publicUrl: 'wss://mdsh.zo1.top:16662/ws/mobile' }, // publicSetup
-  false,                                                                                     // publicSetupBusy
-  '',                                                                                        // cloudflareHost
-  '',                                                                                        // cloudflareToken
-  'quick',                                                                                   // cloudflareMode
-  false,                                                                                     // cloudflareBusy
-  { svg: '<svg/>', qrPayload: 'PAYLOAD-TOKEN', pairing: { expiresAt: 1758003600000 } },      // qr
-  false,                                                                                     // pairingClosing
-  null,                                                                                      // error
-  false,                                                                                     // busy
-  false,                                                                                     // refreshing
-  '已刷新 · 10:00:00',                                                                       // refreshNotice
-  true,                                                                                      // pairingTokenCopied
-  null,                                                                                      // deviceNotice
-  false,                                                                                     // deviceNoticeError
-  () => new Set(),                                                                           // revokingIds
+  },                                 // #9 status
+  null,                                                                       // #10 dismissedNotice
+  'ws://192.168.3.110:3081/ws/mobile',                                        // #11 appUrl
+  'auto',                                                                     // #12 appRoute
+  false,                                                                      // #13 connectionHelpOpen
+  false,                                                                      // #14 toolsOpen
+  false,                                                                      // #15 toolBusy
+  false,                                                                      // #16 backgroundBusy
+  '',                                                                         // #17 toolNotice
+  '203.0.113.10',                                                             // #18 publicIp
+  { installed: true, configured: true, backendPort: 2298, publicUrl: 'wss://mdsh.zo1.top:16662/ws/mobile' }, // #19 publicSetup
+  false,                                                                      // #20 publicSetupBusy
+  '',                                                                         // #21 cloudflareHost
+  '',                                                                         // #22 cloudflareToken
+  'quick',                                                                    // #23 cloudflareMode
+  false,                                                                      // #24 cloudflareBusy
+  { svg: '<svg/>', qrPayload: 'PAYLOAD-TOKEN', pairing: { expiresAt: 1758003600000 } }, // #25 qr
+  false,                                                                      // #26 pairingClosing
+  null,                                                                       // #27 error
+  false,                                                                      // #28 busy
+  null,                                                                       // #29 updateInfo
+  false,                                                                      // #30 updateChecking
+  false,                                                                      // #31 updateBusy
+  '',                                                                         // #32 updateNotice
+  '',                                                                         // #33 updateError
+  false,                                                                      // #34 refreshing
+  '已刷新 · 10:00:00',                                                        // #35 refreshNotice
+  true,                                                                       // #36 pairingTokenCopied
+  null,                                                                       // #37 copyNotice
+  null,                                                                       // #38 deviceNotice
+  false,                                                                      // #39 deviceNoticeError
+  () => new Set(),                                                            // #40 revokingIds
+  false,                                                                      // #41 sidebarBusy
+  false,                                                                      // #42 offlineClearing
+  true,                                                                       // #43 appLayerOpen
 ]
 const exportedB = loadBundle(seededReact(seeds)).factory((id) => {
   if (id === 'react') return seededReact(seeds)
   throw new Error(`unexpected require: ${id}`)
 })
 registrations.length = 0
-exportedB.apply({ slots })
+exportedB.apply({ slots, effect: noEffect })
 const htmlB = renderToStaticMarkup(React.createElement(exportedB.DevicePanel, { close: () => {} }))
 
 for (const [needle, what] of [
@@ -216,7 +246,7 @@ for (const [needle, what] of [
   ['局域网入口已开启：ws://192.168.3.110:3081/ws/mobile', 'lan listening status'],
   ['已配置，Nginx 转发至 DSH 端口 2298', 'public setup configured'],
   ['wss://mdsh.zo1.top:16662/ws/mobile', 'public url'],
-  ['生成配对二维码', 'pair button enabled label'],
+  ['生成 App 二维码', 'app pair button enabled label'],
   ['PAYLOAD-TOKEN', 'pairing payload textarea'],
   ['✓ 已复制', 'copied state'],
   ['My Phone', 'device row name'],
@@ -230,14 +260,14 @@ for (const [needle, what] of [
   ['已刷新 · 10:00:00', 'refresh notice'],
   ['v0.8.5', 'version footer'],
   ['aria-label="关闭"', 'close button'],
-  ['鲸尾公网 · 小程序', 'mini-program relay scheme offered'],
-  ['中继优先，局域网兜底', 'mini-program scheme states relay-first with LAN fallback'],
-  ['鲸尾公网 · 小程序', 'the standalone mini-program relay route remains available'],
+  ['小程序连接（备用）', 'mini-program module offered as the backup route'],
+  ['小程序默认通过鲸尾公网中继连接', 'mini-program module states its relay connection'],
+  ['生成小程序二维码', 'the mini-program module offers its own QR button'],
   ['aria-checked="true"', 'auth switch is on'],
   ['设备 ID ecb2de50…', 'registered relay identity shown (abbreviated)'],
   ['鲸尾公网服务 · 已注册', 'relay registration hint'],
-  ['鲸尾公网 · 小程序', 'the standalone mini-program relay route is restored'],
-  ['也可单独选择「鲸尾公网 · 小程序」', 'the relay registration hint points at the standalone relay route'],
+  ['手机会按实际连通情况在公网与局域网之间自动切换。', 'the automatic app plan explains its connectivity fallback'],
+  ['手机与网关在同一局域网时自动兜底直连', 'the mini-program description states the LAN fallback'],
   ['公网接入', 'public access label is independent of pairing mode'],
   ['若安装或更新后连接异常，请重启应用', 'restart notice shown for the current gateway instance'],
   ['展开其他已配对设备（1）', 'offline devices collapse behind a toggle'],
@@ -256,27 +286,28 @@ console.log('\n=== render C: populated, direct mode ===')
 // JSON round-trip drops the `() => new Set()` seed for the revoking-ids state,
 // so restore it explicitly.
 const directSeeds = JSON.parse(JSON.stringify(seeds))
-directSeeds[3].pairingMode = 'direct'
-directSeeds[3].relay = null
-directSeeds[27] = () => new Set()
+directSeeds[9].pairingMode = 'direct'
+directSeeds[9].relay = null
+directSeeds[8] = () => new Set()
+directSeeds[40] = () => new Set()
 const directRegistrations = []
 const directExported = loadBundle(seededReact(directSeeds)).factory((id) => {
   if (id === 'react') return seededReact(directSeeds)
   throw new Error(`unexpected require: ${id}`)
 })
 directRegistrations.length = 0
-directExported.apply({ slots: { inject: (n, t) => t(), register: (o, c) => { directRegistrations.push({ options: o, component: c }); return () => {} } } })
+directExported.apply({ slots: { inject: (n, t) => t(), register: (o, c) => { directRegistrations.push({ options: o, component: c }); return () => {} } }, effect: noEffect })
 const htmlC = renderToStaticMarkup(React.createElement(directExported.DevicePanel, { close: () => {} }))
 for (const [needle, what] of [
-  ['小程序连接（推荐）', 'mini-program module present'],
-  ['兼容 App（备用）', 'app compatibility layer present (collapsed)'],
-  ['需要连接 DSH App 时展开', 'app layer starts collapsed with an expand hint'],
+  ['小程序连接（备用）', 'mini-program module present'],
+  ['DSH App（推荐）', 'app module present (expanded)'],
+  ['收起 DSH App 方式', 'app layer renders expanded with a collapse hint'],
   ['aria-checked="true"', 'a mode is selected'],
   ['公网接入', 'direct-mode public-access label is plain (no relay caveat)'],
   ['ws://192.168.3.110:3081/ws/mobile', 'gateway address shown'],
-  ['鲸尾公网 · 小程序', 'mini-program module keeps the relay scheme'],
-  ['DSH App 和小程序都可通过公网或局域网连接', 'both clients can use public and LAN routes'],
-  ['中继优先，局域网兜底', 'relay-first and LAN fallback stated'],
+  ['请先注册鲸尾公网中继', 'mini-program pairing stays gated until the relay is registered'],
+
+
 ]) check(htmlC.includes(needle), what)
 check(src.includes("'鲸尾公网 · 小程序'"), 'the standalone relay option stays available in the plan list')
 check(htmlC.includes('配对入口地址（手机需能访问）'), 'the unified address field is rendered in automatic mode')
@@ -288,15 +319,16 @@ for (const needle of ['wss://relay.ahwe.top', 'nodeId ecb2de50', 'agentPubKey nU
 
 // Registered relay service stays visible even while generating a direct App QR.
 const directRelaySeeds = JSON.parse(JSON.stringify(directSeeds))
-directRelaySeeds[3].relay = seeds[3].relay
-directRelaySeeds[3].relayConnector = { running: true, delegatedTo: null, lastError: null }
-directRelaySeeds[27] = () => new Set()
+directRelaySeeds[9].relay = seeds[9].relay
+directRelaySeeds[9].relayConnector = { running: true, delegatedTo: null, lastError: null }
+directRelaySeeds[8] = () => new Set()
+directRelaySeeds[40] = () => new Set()
 const directRelayExported = loadBundle(seededReact(directRelaySeeds)).factory((id) => {
   if (id === 'react') return seededReact(directRelaySeeds)
   throw new Error(`unexpected require: ${id}`)
 })
 const htmlCRelay = renderToStaticMarkup(React.createElement(directRelayExported.DevicePanel, { close: () => {} }))
-check(htmlCRelay.includes('鲸尾公网服务 · 已注册') && htmlCRelay.includes('中继连接保持运行；切换配对方式不会断开已配对设备。'),
+check(htmlCRelay.includes('鲸尾公网服务 · 已注册') && htmlCRelay.includes('中继连接保持运行'),
   'registered relay remains visible and running while direct pairing is selected')
 
 // ------------------------------------------------ render D: Cloudflare tunnel (PC)
@@ -305,13 +337,14 @@ check(htmlCRelay.includes('鲸尾公网服务 · 已注册') && htmlCRelay.inclu
 // platform gate that hides the Linux public-access block.
 console.log('\n=== render D: Cloudflare tunnel (PC) ===')
 const cfSeeds = JSON.parse(JSON.stringify(seeds))
-cfSeeds[27] = () => new Set()
-cfSeeds[6] = 'cloudflare'
-cfSeeds[3].pairingMode = 'direct'
-cfSeeds[3].relay = null
-cfSeeds[3].platform = 'win32'
-cfSeeds[3].tools = { restartWeb: false, stopWeb: false }
-cfSeeds[3].cloudflare = {
+cfSeeds[8] = () => new Set()
+cfSeeds[40] = () => new Set()
+cfSeeds[12] = 'cloudflare'
+cfSeeds[9].pairingMode = 'direct'
+cfSeeds[9].relay = null
+cfSeeds[9].platform = 'win32'
+cfSeeds[9].tools = { restartWeb: false, stopWeb: false }
+cfSeeds[9].cloudflare = {
   supported: true, enabled: true, mode: 'quick', state: 'online', port: 3082,
   configured: false, hostname: '', publicUrl: 'wss://quiet-storm-42.trycloudflare.com', error: '',
   publicReady: true,
@@ -322,7 +355,7 @@ const cfExported = loadBundle(seededReact(cfSeeds)).factory((id) => {
   throw new Error(`unexpected require: ${id}`)
 })
 const cfRegistrations = []
-cfExported.apply({ slots: { inject: (n, t) => t(), register: (o, c) => { cfRegistrations.push({ options: o, component: c }); return () => {} } } })
+cfExported.apply({ slots: { inject: (n, t) => t(), register: (o, c) => { cfRegistrations.push({ options: o, component: c }); return () => {} } }, effect: noEffect })
 const htmlD = renderToStaticMarkup(React.createElement(cfExported.DevicePanel, { close: () => {} }))
 for (const [needle, what] of [
   ['Cloudflare Tunnel', 'cloudflare group rendered on PC'],
@@ -333,7 +366,7 @@ for (const [needle, what] of [
   ['Cloudflare 外网', 'cloudflare pairing route label in the trigger while enabled'],
   ['TLS 校验通过', 'endpoint health message shown when reachable'],
 ]) check(htmlD.includes(needle), what)
-check(htmlD.includes('<details') && htmlD.includes('<summary'), 'Cloudflare configuration is collapsed below pairing controls')
+check(htmlD.includes('mgw-cloudflare-block') && htmlD.includes('接入方式'), 'the cloudflare block renders inline below the pairing controls')
 check(!htmlD.includes('自动模式会优先为小程序使用已就绪的公网入口'), 'Cloudflare-specific route does not show the automatic-mode hint')
 check(!htmlD.includes('Nginx'), 'linux public-access block hidden on PC')
 check(!htmlD.includes('Linux 服务器不自动下载'), 'PC shows the managed-download note, not the Linux one')
@@ -343,12 +376,13 @@ check(!htmlD.includes('Linux 服务器不自动下载'), 'PC shows the managed-d
 // install instructions and the Linux public-access block comes back.
 console.log('\n=== render E: Cloudflare tunnel (Linux) ===')
 const cfLinuxSeeds = JSON.parse(JSON.stringify(seeds))
-cfLinuxSeeds[27] = () => new Set()
-cfLinuxSeeds[6] = 'cloudflare'
-cfLinuxSeeds[3].pairingMode = 'direct'
-cfLinuxSeeds[3].relay = null
-cfLinuxSeeds[3].platform = 'linux'
-cfLinuxSeeds[3].cloudflare = {
+cfLinuxSeeds[8] = () => new Set()
+cfLinuxSeeds[40] = () => new Set()
+cfLinuxSeeds[12] = 'cloudflare'
+cfLinuxSeeds[9].pairingMode = 'direct'
+cfLinuxSeeds[9].relay = null
+cfLinuxSeeds[9].platform = 'linux'
+cfLinuxSeeds[9].cloudflare = {
   supported: true, enabled: false, mode: 'quick', state: 'disabled', port: 3082,
   configured: false, hostname: '', publicUrl: null, error: '',
 }
@@ -357,7 +391,7 @@ const cfLinuxExported = loadBundle(seededReact(cfLinuxSeeds)).factory((id) => {
   throw new Error(`unexpected require: ${id}`)
 })
 const cfLinuxRegistrations = []
-cfLinuxExported.apply({ slots: { inject: (n, t) => t(), register: (o, c) => { cfLinuxRegistrations.push({ options: o, component: c }); return () => {} } } })
+cfLinuxExported.apply({ slots: { inject: (n, t) => t(), register: (o, c) => { cfLinuxRegistrations.push({ options: o, component: c }); return () => {} } }, effect: noEffect })
 const htmlE = renderToStaticMarkup(React.createElement(cfLinuxExported.DevicePanel, { close: () => {} }))
 for (const [needle, what] of [
   ['Cloudflare Tunnel · 外网接入', 'cloudflare group rendered on Linux'],
@@ -365,7 +399,7 @@ for (const [needle, what] of [
   ['pkg.cloudflare.com', 'names the official package source'],
   ['一键开启 Quick Tunnel', 'quick tunnel can be started from Linux'],
   ['未开启', 'tunnel idle state shown'],
-  ['Cloudflare 外网 · 尚未就绪', 'unready Cloudflare route remains selectable'],
+  ['尚未开启 Cloudflare Tunnel，可在下方设置中一键开启。', 'unready cloudflare route points at the setup below'],
   ['先开启 Cloudflare Tunnel', 'pairing stays disabled until the selected tunnel is enabled'],
 ]) check(htmlE.includes(needle), what)
 check(htmlE.includes('Nginx'), 'linux public-access block stays visible on Linux')
@@ -373,29 +407,31 @@ check(htmlE.includes('Nginx'), 'linux public-access block stays visible on Linux
 // Automatic selection should not duplicate Cloudflare setup controls; it can
 // still select a ready public route at pairing time without exposing settings.
 const cfAutoSeeds = JSON.parse(JSON.stringify(cfLinuxSeeds))
-cfAutoSeeds[6] = 'auto'
-cfAutoSeeds[27] = () => new Set()
+cfAutoSeeds[12] = 'auto'
+cfAutoSeeds[8] = () => new Set()
+cfAutoSeeds[40] = () => new Set()
 const cfAutoExported = loadBundle(seededReact(cfAutoSeeds)).factory((id) => {
   if (id === 'react') return seededReact(cfAutoSeeds)
   throw new Error(`unexpected require: ${id}`)
 })
 const htmlAuto = renderToStaticMarkup(React.createElement(cfAutoExported.DevicePanel, { close: () => {} }))
-check(htmlAuto.includes('自动模式会优先为小程序使用已就绪的公网入口'), 'automatic route explains its public-endpoint priority')
+check(htmlAuto.includes('手机会按实际连通情况在公网与局域网之间自动切换。'), 'automatic route explains its connectivity fallback')
 check(!htmlAuto.includes('mgw-cloudflare-block'), 'Cloudflare configuration is hidden in automatic mode')
-check(htmlAuto.includes('Cloudflare 外网 · 尚未就绪'), 'automatic mode keeps the Cloudflare option available for selection')
+check(htmlAuto.includes('mgw-cloudflare-block') === false, 'the cloudflare block stays hidden in automatic mode')
 
 // ------------------------------------------- render F: named tunnel mode (Linux)
 // The named-tunnel form state: how to obtain the domain and Token, with the
 // two jumps to the Cloudflare dashboard and the official guide.
 console.log('\n=== render F: named tunnel mode ===')
 const cfNamedSeeds = JSON.parse(JSON.stringify(seeds))
-cfNamedSeeds[27] = () => new Set()
-cfNamedSeeds[6] = 'cloudflare'
-cfNamedSeeds[3].pairingMode = 'direct'
-cfNamedSeeds[3].relay = null
-cfNamedSeeds[3].platform = 'linux'
-cfNamedSeeds[16] = 'named'
-cfNamedSeeds[3].cloudflare = {
+cfNamedSeeds[8] = () => new Set()
+cfNamedSeeds[40] = () => new Set()
+cfNamedSeeds[12] = 'cloudflare'
+cfNamedSeeds[9].pairingMode = 'direct'
+cfNamedSeeds[9].relay = null
+cfNamedSeeds[9].platform = 'linux'
+cfNamedSeeds[23] = 'named'
+cfNamedSeeds[9].cloudflare = {
   supported: true, enabled: false, mode: 'quick', state: 'disabled', port: 3082,
   configured: false, hostname: '', publicUrl: null, error: '',
 }
@@ -404,7 +440,7 @@ const cfNamedExported = loadBundle(seededReact(cfNamedSeeds)).factory((id) => {
   throw new Error(`unexpected require: ${id}`)
 })
 const cfNamedRegistrations = []
-cfNamedExported.apply({ slots: { inject: (n, t) => t(), register: (o, c) => { cfNamedRegistrations.push({ options: o, component: c }); return () => {} } } })
+cfNamedExported.apply({ slots: { inject: (n, t) => t(), register: (o, c) => { cfNamedRegistrations.push({ options: o, component: c }); return () => {} } }, effect: noEffect })
 const htmlF = renderToStaticMarkup(React.createElement(cfNamedExported.DevicePanel, { close: () => {} }))
 for (const [needle, what] of [
   ['命名 Tunnel · 固定域名', 'named mode is the selected value'],
@@ -420,9 +456,10 @@ check(htmlF.includes('dash.cloudflare.com') && htmlF.includes('target="_blank"')
 // 可信设备徽标：每台在线设备按当前连接入口标注 局域网 / 公网 / Cloudflare 外网，
 // 直接取轮询返回的 device.routes；离线设备没有连接，不显示线路徽标。
 const routeSeeds = JSON.parse(JSON.stringify(seeds))
-routeSeeds[27] = () => new Set()
-routeSeeds[2] = true // showAllDevices so the offline row renders too
-routeSeeds[1] = [
+routeSeeds[8] = () => new Set()
+routeSeeds[40] = () => new Set()
+routeSeeds[6] = true // showAllDevices so the offline row renders too
+routeSeeds[3] = [
   { id: 'd1', name: 'LAN Phone', displayName: 'LAN Phone', online: true, connections: 1, routes: ['lan'], lastSeenAt: 1758000000000 },
   { id: 'd2', name: 'CF Phone', displayName: 'CF Phone', online: true, connections: 2, routes: ['cloudflare'], lastSeenAt: 1758000000000 },
   { id: 'd3', name: 'Old Phone', displayName: 'Old Phone', online: false, connections: 0, routes: [], lastSeenAt: 1757900000000 },
@@ -432,7 +469,7 @@ const routeExported = loadBundle(seededReact(routeSeeds)).factory((id) => {
   throw new Error(`unexpected require: ${id}`)
 })
 const routeRegistrations = []
-routeExported.apply({ slots: { inject: (n, t) => t(), register: (o, c) => { routeRegistrations.push({ options: o, component: c }); return () => {} } } })
+routeExported.apply({ slots: { inject: (n, t) => t(), register: (o, c) => { routeRegistrations.push({ options: o, component: c }); return () => {} } }, effect: noEffect })
 const htmlG = renderToStaticMarkup(React.createElement(routeExported.DevicePanel, { close: () => {} }))
 for (const [needle, what] of [
   ['局域网', 'LAN route badge rendered'],
@@ -455,23 +492,29 @@ check(src.includes("['network', '网络检测']") && !src.includes("['install', 
   'panel offers the network section and no install section')
 check(src.includes("value: 'tailscale'") && src.includes('主机 Tailscale 地址'),
   'pairing offers the Tailscale route with a manual host-address input')
-check(src.includes("'/mgw/ui'") && src.includes('在左侧栏显示入口'),
-  'the sidebar entry can be toggled from the plugin page')
-check(src.includes("(pairingRoute === 'relay' || pairingRoute === 'auto') && (relayInfo"),
-  'relay registration content is scoped to the relay and auto plans')
+check(src.includes("'/mgw/ui'") && src.includes('左侧栏显示入口') && src.includes('toggleEntryMaster')
+  && src.includes('entryMaster'),
+  'the sidebar entries share a persisted master toggle')
+check(src.includes('侧边栏底部入口') && src.includes('左侧栏上方插件区')
+  && src.includes("'sidebar.panellist'") && src.includes('syncPluginsAreaSlot')
+  && src.includes("id: 'mobile-gateway-panel'")
+  && src.includes('getEntryMaster() && getPluginsAreaEntry()'),
+  'both sub entries are gated by the master and the panellist slot is registered/unregistered')
+check(src.includes('(relayInfo || relayConnector?.running || relayConnector?.delegatedTo || relayConnector?.lastError)'),
+  'relay status content is scoped to the mini-program module')
 check(src.includes("id: 'mobile-gateway'"), 'registers the mobile-gateway settings section')
 check(src.includes('function apiPath') && src.includes('document.baseURI')
   && src.includes('fetch(apiPath(path)'), 'management RPC resolves against the document base (gateway prefix safe)')
 check(src.includes("'/mgw/cloudflare'") && src.includes('/mgw/tools/') && src.includes('pairingUrlFor'),
   'cloudflare tunnel, web tools and pairing routes wired')
-check(src.includes("'Cloudflare 外网'") && src.includes("'公网或其他手动地址'") && src.includes("'鲸尾公网 · 小程序'") && src.includes("'小程序连接（推荐）'") && src.includes("'兼容 App（备用）'") && src.includes("route: 'mini'") && !src.includes('建设中'),
-  'custom Select offers cloudflare modes and the custom route')
+check(src.includes("'Cloudflare 外网'") && src.includes("'公网或其他手动地址'") && src.includes("'小程序连接（备用）'") && src.includes("'DSH App（推荐）'") && src.includes("route: 'mini'") && !src.includes('建设中'),
+  'the app select offers cloudflare and custom routes; the mini module keeps its fixed scheme')
 check(src.includes('function GatewaySelect') && src.includes("addEventListener('pointerdown', outside)")
   && src.includes("if (event.key === 'Escape')"),
   'GatewaySelect closes on Escape and on outside pointerdown')
 check(src.includes('function GatewaySelect'), 'the panel uses the themed GatewaySelect')
-check(src.includes('route: pairingRoute') && src.includes('lanUrl: lanPairingUrl(status)') && src.includes("value: 'relay'") && !src.includes('deviceName'),
-  'pairing supports both the automatic dual-client route and a standalone relay route without exposing the device name')
+check(src.includes('route: appRoute') && src.includes("route: 'mini'") && src.includes('lanUrl: lanPairingUrl(status)') && !src.includes('deviceName'),
+  'pairing requests carry the selected app route and a fixed mini-program route without exposing the device name')
 // 扫码成功后二维码弹窗要自动关闭：轮询发现自己的配对码离开待用列表即 setQr(null)。
 check(src.includes('pairingIdRef.current = data.pairing?.id || null')
   && src.includes('!statusData.pendingPairings.includes(pairingIdRef.current)'),
@@ -486,10 +529,8 @@ check(src.includes("document.execCommand('copy')")
   'copy pairing token falls back to execCommand and reports inside the QR dialog')
 // Restore the saved standalone relay route until the operator explicitly
 // chooses another option; subsequent polling must not override that choice.
-check(src.includes("const savedRoute = statusData.pairingMode === 'relay' ? 'relay' : 'auto'")
-  && src.includes('if (!pairingRouteSelectedRef.current)')
-  && src.includes("const preferredUrl = pairingUrlFor(pairingRouteRef.current, statusData)"),
-  'refresh restores the saved pairing route without overriding a new selection')
+check(src.includes("const [appRoute, setAppRoute] = React.useState('auto')") && src.includes('chooseAppRoute('),
+  'the app route is a controlled selection updated only by explicit operator choice')
 // 上游基底的 module id 是 dsh-plugin-mobile-gateway；加载器按包名
 // dsh-plugin-weapp-gateway 查找，id 不一致会 "loaded without registering"。
 check(/id: 'dsh-plugin-weapp-gateway'/.test(src) && !src.includes("id: 'dsh-plugin-mobile-gateway'"),

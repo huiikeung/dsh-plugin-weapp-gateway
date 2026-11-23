@@ -5,7 +5,7 @@ import path from 'node:path'
 import { test } from 'node:test'
 import { resolveDshRuntimeVersion } from '../lib/dsh-runtime-version.mjs'
 
-test('报告宿主启动包实际版本，支持符号链接入口与版本升级', () => {
+test('报告宿主启动包实际版本，支持符号链接入口与版本升级', { skip: process.platform === 'win32' && '创建符号链接在 Windows 上需要管理员或开发者模式（EPERM）' }, () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-version-'))
   try {
     const entry = path.join(root, 'lib/bin.js')

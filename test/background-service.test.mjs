@@ -43,7 +43,8 @@ test('installs a private launch snapshot, enables systemd, and disables without 
   assert.match(unit, /WantedBy=default.target/)
   assert.ok(!unit.includes('private'))
   const specPath = path.join(directory, result.unit + '.json')
-  assert.equal((await fs.stat(specPath)).mode & 0o777, 0o600)
+  // Windows does not emulate POSIX bits: 0600 falls back to 0666 on NTFS.
+  if (process.platform !== 'win32') assert.equal((await fs.stat(specPath)).mode & 0o777, 0o600)
   const spec = JSON.parse(await fs.readFile(specPath, 'utf8'))
   assert.equal(spec.env.API_TOKEN, 'private')
   assert.equal(spec.env.DSH_BACKGROUND_UNIT, result.unit)

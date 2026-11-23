@@ -250,8 +250,39 @@ function expectRejected(url, options = {}) {
   })
   assert.equal(blockedPublicSetup.status, 403)
 
-  // 面板 UI 偏好：侧边栏入口开关（默认开启，可持久化关闭，非法值 400）。
-  assert.equal((await (await fetch(`${base}/mgw/ui`)).json()).sidebarEntry, true)
+  // 面板 UI 偏好：总开关默认开，两个子开关各自持久化、互不覆盖。
+  const uiInitial = await (await fetch(`${base}/mgw/ui`)).json()
+  assert.equal(uiInitial.entryMaster, true)
+  assert.equal(uiInitial.sidebarEntry, true)
+  assert.equal(uiInitial.pluginsEntry, true)
+  assert.equal(uiInitial.appModule, true)
+  assert.equal(uiInitial.miniModule, true)
+  const uiMasterOff = await fetch(`${base}/mgw/ui`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Origin: base },
+    body: JSON.stringify({ entryMaster: false }),
+  })
+  assert.equal(uiMasterOff.status, 200)
+  const masterOffState = await uiMasterOff.json()
+  assert.equal(masterOffState.entryMaster, false)
+  // 总开关关闭不影响子开关的保存值。
+  assert.equal(masterOffState.sidebarEntry, true)
+  const uiMasterRestore = await fetch(`${base}/mgw/ui`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Origin: base },
+    body: JSON.stringify({ entryMaster: true }),
+  })
+  assert.equal((await uiMasterRestore.json()).entryMaster, true)
+  const uiPluginsOn = await fetch(`${base}/mgw/ui`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Origin: base },
+    body: JSON.stringify({ pluginsEntry: true }),
+  })
+  assert.equal(uiPluginsOn.status, 200)
+  const pluginsState = await uiPluginsOn.json()
+  assert.equal(pluginsState.pluginsEntry, true)
+  assert.equal(pluginsState.sidebarEntry, true)
+  assert.equal((await (await fetch(`${base}/mgw/ui`)).json()).pluginsEntry, true)
   const uiOff = await fetch(`${base}/mgw/ui`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Origin: base },
@@ -259,18 +290,32 @@ function expectRejected(url, options = {}) {
   })
   assert.equal(uiOff.status, 200)
   assert.equal((await uiOff.json()).sidebarEntry, false)
-  assert.equal((await (await fetch(`${base}/mgw/ui`)).json()).sidebarEntry, false)
+  const afterSidebarOff = await (await fetch(`${base}/mgw/ui`)).json()
+  assert.equal(afterSidebarOff.sidebarEntry, false)
+  assert.equal(afterSidebarOff.pluginsEntry, true)
   const uiInvalid = await fetch(`${base}/mgw/ui`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Origin: base },
     body: JSON.stringify({ sidebarEntry: 'no' }),
   })
   assert.equal(uiInvalid.status, 400)
+  const uiBothInvalid = await fetch(`${base}/mgw/ui`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Origin: base },
+    body: JSON.stringify({}),
+  })
+  assert.equal(uiBothInvalid.status, 400)
   await fetch(`${base}/mgw/ui`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Origin: base },
-    body: JSON.stringify({ sidebarEntry: true }),
+    body: JSON.stringify({ sidebarEntry: true, pluginsEntry: false, entryMaster: true, appModule: true, miniModule: true }),
   })
+  const uiRestored = await (await fetch(`${base}/mgw/ui`)).json()
+  assert.equal(uiRestored.sidebarEntry, true)
+  assert.equal(uiRestored.pluginsEntry, false)
+  assert.equal(uiRestored.entryMaster, true)
+  assert.equal(uiRestored.appModule, true)
+  assert.equal(uiRestored.miniModule, true)
 
   assert.equal(await expectRejected(wsUrl), 503)
 
