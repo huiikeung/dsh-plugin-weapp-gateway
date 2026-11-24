@@ -1,5 +1,20 @@
 # 版本记录
 
+## 未发布（Bot 模式网关侧接入）
+
+### 新增功能
+
+- 移植上游 Bot 桥：`lib/bot-bridge.mjs`、`lib/bot-images.mjs`、`lib/bot-avatars.mjs`（含 vendored DS-Bot 角色定义），
+  经 `connection.createSharedFetchHandler('/api')` 桥接宿主 DS-Bot 的固定 `/api/bot` 与 `/api/bot/feed`，
+  不新增监听端口、不代理任意 URL。
+- 宿主适配器新增 `bot` 通道：`bot-call`（读/写端点白名单、30s 超时、4 MiB 帧上限）、`bot-subscribe` / `bot-unsubscribe`
+  （每条设备连接一个订阅，断线释放上游 reader）、Bot 图片分块（384 KiB/块、单图 ≤16 MiB、SHA-256 rev）；
+  `send-attachments` 复用官方会话提交入口与已配对设备的上传回执。
+- hello 能力新增 `bot-v1`；Bot hello 追加 `agent-image-refs` / `image-chunks` / `markdown-image` 与 `imageBridge` 声明。
+- 测试：新增上游 Bot 桥契约测试 26 项（`test/bot-bridge.test.mjs`、`test/bot-images.test.mjs`）与网关适配器接线测试 4 项
+  （`test/bot-adapter-wiring.test.mjs`）。
+
+
 ## 0.12.1
 
 版本准备日期为 2026 年 11 月 14 日，当前状态为待发布。

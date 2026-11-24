@@ -735,12 +735,18 @@ function waitFor(pred, timeout) { return new Promise((res) => { const t0 = Date.
       assert.equal(controls.find(f => f.kind === 'hello').capabilities.includes('file-references-v1'), true)
       assert.equal(controls.find(f => f.kind === 'hello').capabilities.includes('file-upload-v1'), false,
         'file upload is advertised only when the Host exposes its official streaming route')
+      assert.equal(controls.find(f => f.kind === 'hello').capabilities.includes('bot-v1'), false,
+        'the Bot bridge is advertised only when the Host exposes the shared /api route')
       // hello reports the probed DSH runtime version; when the probe is
       // unavailable (plain Node test process) the current fallback is used.
       assert.equal(controls.find(f => f.kind === 'hello').dshVersion, '0.2.2-rc.3')
       control.send(JSON.stringify({ type: 'plugin-catalog', requestId: 'unauthenticated-catalog' }))
       assert.equal(await waitFor(() => controls.some(f => f.requestId === 'unauthenticated-catalog'), 2000), true)
       assert.equal(controls.find(f => f.requestId === 'unauthenticated-catalog').code, 'authentication-required')
+      control.send(JSON.stringify({ type: 'bot-call', requestId: 'unauthenticated-bot', endpoint: 'hello', payload: { api: [1] } }))
+      assert.equal(await waitFor(() => controls.some(f => f.requestId === 'unauthenticated-bot'), 2000), true)
+      assert.equal(controls.find(f => f.requestId === 'unauthenticated-bot').code, 'authentication-required',
+        'Bot requests require a paired device')
       control.send(JSON.stringify({ type: 'clawbot-control', action: 'status', requestId: 'unauthenticated-clawbot' }))
       assert.equal(await waitFor(() => controls.some(f => f.requestId === 'unauthenticated-clawbot'), 2000), true)
       assert.equal(controls.find(f => f.requestId === 'unauthenticated-clawbot').code, 'authentication-required')

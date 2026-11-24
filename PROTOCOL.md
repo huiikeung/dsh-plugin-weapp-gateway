@@ -1234,7 +1234,57 @@ DSH Web 的“深度求索中，用时 22 秒 ···”是客户端文案，不�
 
 ---
 
-## 16. 版本历史（插件）
+## 16. Bot 模式（bot-v1）
+
+DS-Bot 是宿主 DSH 的官方插件，负责 Bot 团队、私聊/群聊、记忆与定时任务。网关只桥接它的固定本地路由
+`POST http://localhost/api/bot` 与 `GET http://localhost/api/bot/feed`（`connection.createSharedFetchHandler('/api')` + owner Peer），
+不新增监听端口、不代理任意 URL；主机未安装或未启用 DS-Bot 时返回 `bot-unavailable`。
+
+### 能力与握手
+
+hello 的 `capabilities` 增加 `bot-v1`。客户端进入 Bot 模式前先 `bot-call` 一次 `hello`：
+
+```json
+{"type":"bot-call","requestId":"bot-1","endpoint":"hello","payload":{"api":[1]}}
+{"kind":"bot-result","requestId":"bot-1","endpoint":"hello","value":{"api":1,"capabilities":["chat","feed","agent-image-refs"],"imageBridge":{"provider":"mobile-gateway","agentImageScopes":["private-chat"],"maxBytes":16777216}}}
+```
+
+图片能力（`agent-image-refs` / `image-chunks` / `markdown-image`）由本网关追加；`imageBridge` 明确兼容层来源。
+图片端点 `image` / `markdown-image` 从 `offset:0` 起分块返回，每块 ≤384 KiB、单图 ≤16 MiB，`rev` 为内容 SHA-256。
+
+### 请求与回执
+
+- `requestId`：1–128 字符，仅字母/数字/`.`/`_`/`:`/`-`；写操作不自动重发，超时或断线保留「待确认」并由历史对账。
+- 读端点：`hello`、`state`、`chat`、`room-chat`、`notices`、`avatar`、`image`、`markdown-image`、`file-text`、
+  `memory-view`、`memory-history`、`usage-summary`、`schedules`、`run-stats`、`creation-appearance`、`models`、`efforts` 等。
+- 写端点：`send`、`send-attachments`、`answer-question`、`approval-answer`、`memory-add/edit/forget`、`schedule-create/delete`、
+  `create-bot`、`update-bot`、`duplicate-bot`、`delete-bot`、`set-main`、`create-room`、`set-flags` 等。
+- 单次调用超时 30s，单帧/单事件上限 4 MiB；不支持宿主配对、密钥管理与任意 URL 代理。
+- 私聊历史用 `chat`、群聊历史用 `room-chat`，分页 cursor 为不透明对象需原样回传。
+
+### 实时订阅
+
+```json
+{"type":"bot-subscribe","requestId":"bot-2"}
+{"kind":"bot-subscribed","requestId":"bot-2","subscriptionId":"bot-2","hello":{}}
+{"kind":"bot-event","subscriptionId":"bot-2","botEvent":"stream","botData":{}}
+{"type":"bot-unsubscribe","requestId":"bot-3"}
+{"kind":"bot-subscribed","requestId":"bot-3","subscriptionId":null}
+```
+
+- 每条设备连接最多一个订阅；替换、取消或设备断线都会释放上游 reader，旧订阅的尾部不得进入新订阅。
+- `botEvent` 支持 `hello/revision/live/message/stream/notice/room`，未知事件客户端跳过。
+- 上游流结束或解析失败下发 `bot-stream-reset`；客户端有界退避后重新订阅，并按历史重新对账。
+
+### 错误
+
+沿用统一错误帧（`kind:error` + `requestType`/`requestId`/`code`/`message`）：
+`bot-unavailable`（主机未启用 DS-Bot）、`bot-version-unsupported`（API 无交集）、`bot/stale`、`bot/read-only`、
+`bot-timeout`、`bot-image-invalid`，以及未声明 `bot-v1` 的旧网关。
+
+---
+
+## 17. 版本历史（插件）
 
 | 版本 | 新增 |
 |---|---|
