@@ -6,6 +6,13 @@
 
 `dsh-plugin-weapp-gateway` · DeepSeek Harness 移动客户端连接插件
 
+### v0.8.70 · DS-Bot 桥接入（bot-v1）
+
+- 移植上游 Bot 桥（`lib/bot-bridge.mjs` / `lib/bot-images.mjs` / `lib/bot-avatars.mjs`，含 vendored DS-Bot 角色定义）：经 `connection.createSharedFetchHandler('/api')` 固定桥接宿主 `/api/bot` 与 `/api/bot/feed`，不新增监听端口、不代理任意 URL。
+- 宿主适配器新增 `bot` 通道：`bot-call`（读/写端点白名单、30s 超时、4 MiB 帧上限）、`bot-subscribe` / `bot-unsubscribe`（每条设备连接一个订阅，断线释放上游 reader）、Bot 图片分块（384 KiB/块、单图 ≤16 MiB、SHA-256 rev）；`send-attachments` 复用官方会话提交入口与上传回执。
+- hello 能力新增 `bot-v1`（仅当宿主提供 `/api` 共享路由；旧宿主不声明、调用返回 `bot-unavailable`），Bot 请求要求已配对设备，未鉴权返回 `authentication-required`。
+- 测试：Bot 桥契约 26 项、适配器接线 4 项，gateway 分发补充 bot 能力与鉴权断言；全量测试通过。
+
 ### v0.8.69 · 面板标签嵌套修复与真实运行时版本
 
 - 修复「连接与配对」「网络检测」标签页整块空白：v0.8.68 的「插件在线更新」区块少闭合一层，导致这两组面板被错误嵌套进「通用设置」，切换标签后父容器隐藏、内容随之不可见；现恢复四个分组平级，配对模块与网络诊断正常显示。
