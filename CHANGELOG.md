@@ -1,5 +1,25 @@
 # 版本记录
 
+## 0.8.71（会话置顶协议对齐上游）
+
+版本发布状态：待发布。对齐上游 `dsh-plugin-mobile-gateway` 的会话置顶协议，补齐 fork 缺口的 `session-pin-v1`。
+
+### 新增功能
+
+- 新请求 `session-pin`（`sessionId`、`pinned`、`requestId?`）：走 Host 与 WebUI 共用的
+  `workspace.pinSession` / `workspace.unpinSession`，成功回 `session-pin-set`；`pinned` 非布尔值返回
+  `bad-request`，不存在的会话返回 Host 的 `session/not-found`。
+- 新帧 `session-pins`（`pinnedSessionIds`）：网关从 workspace baseline 缓存完整置顶集合，
+  新设备连接（非 `conversation` 通道）先收到当前集合，之后 WebUI/App/其他客户端的置顶变化再推一份完整集合，
+  最近置顶的排在前面。写入回执不携带集合，避免延迟响应覆盖别的客户端刚发布的顺序。
+- hello 能力新增 `session-pin-v1`；宿主适配器新增 `workspace.pinSession` / `workspace.unpinSession` 透传。
+
+### 文档与测试
+
+- `PROTOCOL.md` 增加 `session-pin` 请求行、`Session 置顶` 小节与 `session-pins` 帧说明。
+- `test/gateway.test.mjs` 新增置顶用例：能力声明、连接基线集合、置顶/取消置顶回执与广播、
+  `bad-request` 与 `session/not-found` 错误路径。
+
 ## 0.8.70（Bot 模式网关侧接入）
 
 版本发布状态：已发布。

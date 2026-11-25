@@ -83,7 +83,7 @@ const pairingText = Buffer.from(JSON.stringify(payload), 'utf8').toString('base6
 ```json
 { "kind": "paired", "token": "<长期设备 token>",
   "device": { "id": "...", "name": "iPhone", "createdAt": 1787111700000 } }
-{ "kind": "hello", "protocol": 3, "capabilities": ["split-channels", "network-diagnostics-v1", "images", "commands", "tasks", "goals", "turn-outline-v1", "agent-team-v1", "subagent-conversations-v1", "file-upload-v1", "file-references-v1", "llm-model-config-v1", "session-cancel", "queue-control", "session-archive", "session-rename", "file-downloads"], "authenticated": true,
+{ "kind": "hello", "protocol": 3, "capabilities": ["split-channels", "network-diagnostics-v1", "images", "commands", "tasks", "goals", "turn-outline-v1", "agent-team-v1", "subagent-conversations-v1", "file-upload-v1", "file-references-v1", "llm-model-config-v1", "session-cancel", "queue-control", "session-archive", "session-pin-v1", "session-rename", "file-downloads"], "authenticated": true,
   "device": { "id": "...", "name": "iPhone" }, "port": 3080, "clients": 1 }
 ```
 
@@ -679,6 +679,7 @@ let image = [
 |---|---|---|
 | `sessions` | — | 会话列表（`updatedAt/running/blank/cwd/agentPreset`） |
 | `session-archive` | `sessionId` | 将 Session 加入 Host 的完整归档集合（隐藏但不删除） |
+| `session-pin` | `sessionId`, `pinned`（布尔值）, `requestId?` | 通过 Host 与 WebUI 共用的接口设置会话置顶状态（需 `session-pin-v1`） |
 | `session-rename` | `sessionId`, `title` | 写入用户指定的持久化 Session 名称 |
 | `history` | `sessionId`, `beforeSeq?`, `historyFormatVersion?`, `maxMessages?`, `maxBytes?`, `view?` | 历史事件页（见下） |
 | `attachment` | `sessionId`, `attachmentId` | 读取历史中属于该会话的图片字节 |
@@ -728,6 +729,26 @@ WebUI、App 或其他客户端造成的变化通过以下帧主动推送：
 - `session-archives` 在网关取得 opening baseline 后缓存；新设备连接时会收到当前完整集合，之后每次 WebUI 归档都会收到新的完整集合。
 - `session-title-changed` 是 Session 列表级元数据通知，即使客户端正在 `subscribe` 另一个 Session 也会收到。
 - 同一名称变化仍会作为带序号的普通 `event` 帧发给订阅该 Session 的客户端；客户端可按 `seq` 幂等处理。
+
+### Session 置顶
+
+在 App 端置顶 / 取消置顶 Session（需能力 `session-pin-v1`）：
+
+```json
+{ "type": "session-pin", "sessionId": "session-abc", "pinned": true, "requestId": "pin-1" }
+→ { "kind": "session-pin-set", "sessionId": "session-abc", "requestId": "pin-1" }
+```
+
+`session-pin-set` 只表示 Host 已接受这次写入，**不携带置顶集合**；集合与顺序由 `session-pins` 帧发布：
+
+```json
+{ "kind": "session-pins", "pinnedSessionIds": ["session-abc", "session-web"] }
+```
+
+- 网关声明 `session-pin-v1` 后，支持置顶的 Host 会通过 `session-pins` 发送 `pinnedSessionIds`，包括初始集合和随后的变化，最近置顶的会话排在前面。
+- 新设备连接（非 `conversation` 通道）时会先收到当前 `pinnedSessionIds`；之后 WebUI、App 或其他客户端的置顶变化会再推一份完整集合，客户端应整体替换本地集合。
+- `pinned` 不是布尔值返回 `bad-request`；Host 里不存在的 Session 返回 Host 的 `session/not-found`。
+- 置顶只影响列表顺序与展示，不改变 Session 的运行状态或历史。
 
 ### `history` 详细
 ```json
@@ -1171,6 +1192,7 @@ Control/旧单连接接收全局模式状态增量，不受所订阅会话过滤
 | `event` | 任意会话的 agent 输出（见下） |
 | `session-queues` / `session-queue` | Host 队列完整快照 / 单个 Session 队列替换值 |
 | `session-archives` | Host 的完整 Session 归档集合在连接初始化或 WebUI/App 归档后变化 |
+| `session-pins` | Host 的完整 Session 置顶集合在连接初始化或任意客户端置顶/取消置顶后变化；最近置顶的排在前面 |
 | `session-title-changed` | 任意客户端写入新的持久化 Session 名称 |
 | `tasks-updated` / `goal-updated` | 当前会话的任务列表或目标 projection 发生变化 |
 | `schedule-changed` | Host 定时任务目录已变化；无载荷，重新请求 `schedule-catalog` 或当前 Session 的 `schedule-list` |

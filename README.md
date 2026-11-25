@@ -6,6 +6,13 @@
 
 `dsh-plugin-weapp-gateway` · DeepSeek Harness 移动客户端连接插件
 
+### v0.8.71 · 会话置顶协议对齐上游（session-pin-v1）
+
+- 对齐上游 `dsh-plugin-mobile-gateway` 的会话置顶协议：新增 `session-pin` 请求（`sessionId`、`pinned`、`requestId?`），走 Host 与 WebUI 共用的 `workspace.pinSession` / `workspace.unpinSession`，成功回 `session-pin-set`（不带集合）。
+- 新帧 `session-pins`（`pinnedSessionIds`）：网关缓存 workspace baseline 的完整置顶集合，新设备连接先收当前集合，之后任意客户端（含 WebUI）的置顶变化再推完整集合，最近置顶的排在前面；客户端应整体替换本地集合。
+- hello 能力新增 `session-pin-v1`；`pinned` 非布尔值返回 `bad-request`，不存在的会话透传 Host 的 `session/not-found`。
+- `PROTOCOL.md` 补充请求行、`Session 置顶` 小节与帧说明；`test/gateway.test.mjs` 增加基线/回执/广播/错误路径用例（置顶 1 项交互断言），全量分发测试 159 项通过。
+
 ### v0.8.70 · DS-Bot 桥接入（bot-v1）
 
 - 移植上游 Bot 桥（`lib/bot-bridge.mjs` / `lib/bot-images.mjs` / `lib/bot-avatars.mjs`，含 vendored DS-Bot 角色定义）：经 `connection.createSharedFetchHandler('/api')` 固定桥接宿主 `/api/bot` 与 `/api/bot/feed`，不新增监听端口、不代理任意 URL。

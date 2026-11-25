@@ -201,6 +201,9 @@ function fakeApi() {
   const cancelCalls = []
   const queueUpdateCalls = []
   const archiveCalls = []
+  const pinCalls = []
+  // Host 侧的置顶集合：初始化带一个 WebUI 置顶项，测试据此验证基线集合与后续变化。
+  const hostPins = ['web-initial']
   const renameCalls = []
   const settingsUpdates = []
   const goalCalls = []
@@ -224,6 +227,8 @@ function fakeApi() {
     cancelCalls,
     queueUpdateCalls,
     archiveCalls,
+    pinCalls,
+    hostPins,
     renameCalls,
     settingsUpdates,
     goalCalls,
@@ -264,11 +269,33 @@ function fakeApi() {
         : { id: req.payload.id, title: req.payload.patch.title, status: 'active' } } } },
     },
     workspace: {
-      async list() { return { rpcId: 'r', result: { ok: true, value: { items: [], archivedSessionIds: [] } } } },
+      async list() {
+        return { rpcId: 'r', result: { ok: true, value: {
+          items: [], archivedSessionIds: [], pinnedSessionIds: hostPins.slice(),
+        } } }
+      },
       async create() { return { rpcId: 'r', result: { ok: true, value: { workspace: { workspaceId: 'w', path: '/tmp', title: 't', sessionIds: [], createdAt: 'c', updatedAt: 'u' }, created: true } } } },
       async archiveSession(req) {
         archiveCalls.push(req.payload)
         return { rpcId: 'r', result: { ok: true, value: { archivedSessionIds: [req.payload.sessionId] } } }
+      },
+      async pinSession(req) {
+        const sessionId = req.payload.sessionId
+        if (sessionId === 'missing') {
+          throw Object.assign(new Error('no such session'), { code: 'session/not-found' })
+        }
+        pinCalls.push({ pinned: true, sessionId })
+        hostPins.unshift(sessionId)
+        workspaceFrames.push({ type: 'pinned', pinnedSessionIds: hostPins.slice() })
+        return { rpcId: 'r', result: { ok: true, value: { sessionId } } }
+      },
+      async unpinSession(req) {
+        const sessionId = req.payload.sessionId
+        pinCalls.push({ pinned: false, sessionId })
+        const index = hostPins.indexOf(sessionId)
+        if (index >= 0) hostPins.splice(index, 1)
+        workspaceFrames.push({ type: 'pinned', pinnedSessionIds: hostPins.slice() })
+        return { rpcId: 'r', result: { ok: true, value: { sessionId } } }
       },
     },
     settings: {
@@ -427,6 +454,8 @@ ctx.typertGateway = {
     }
     if (req.namespace === 'workspace' && req.method === 'create') return unwrap(api.workspace.create)
     if (req.namespace === 'workspace' && req.method === 'archiveSession') return unwrap(api.workspace.archiveSession)
+    if (req.namespace === 'workspace' && req.method === 'pinSession') return unwrap(api.workspace.pinSession)
+    if (req.namespace === 'workspace' && req.method === 'unpinSession') return unwrap(api.workspace.unpinSession)
     if (req.namespace === 'settings' && req.method === 'describe') return unwrap(api.settings.describe, {})
     if (req.namespace === 'settings' && req.method === 'update') {
       return unwrap(api.settings.update, { ns: req.args.ns, patch: req.args.patch })
@@ -1071,6 +1100,27 @@ function waitFor(pred, timeout) { return new Promise((res) => { const t0 = Date.
   workspaceFrames.push({ type: 'archived', archivedSessionIds: ['s1'] })
   const archivesUpdated = await waitFor(() => got.some((m) => m.kind === 'session-archives' && m.archivedSessionIds.includes('s1')), 2000)
   interactionResults.push(['live session archive state', archivesUpdated])
+
+  // 置顶（对齐上游 session-pin-v1）：连接时收到完整集合，写入只回 session-pin-set，
+  // 顺序与集合一律由 session-pins 发布（WebUI 写同一个 Host 控制器也会推）。
+  const pinsFrames = () => got.filter((m) => m.kind === 'session-pins')
+  const lastPins = () => pinsFrames().slice(-1)[0]?.pinnedSessionIds
+  const pinnedBaseline = await waitFor(() => Array.isArray(lastPins())
+    && lastPins().length === 1 && lastPins()[0] === 'web-initial', 2000)
+  const pinCapability = got.find((m) => m.kind === 'hello').capabilities.includes('session-pin-v1')
+  ws.send(JSON.stringify({ type: 'session-pin', sessionId: 's1', pinned: true, requestId: 'pin-s1' }))
+  const pinAck = await waitFor(() => got.some((m) => m.kind === 'session-pin-set' && m.requestId === 'pin-s1'), 2000)
+  const pinBroadcast = await waitFor(() => lastPins()?.[0] === 's1' && lastPins().length === 2, 2000)
+  ws.send(JSON.stringify({ type: 'session-pin', sessionId: 's1', pinned: false, requestId: 'unpin-s1' }))
+  const unpinAck = await waitFor(() => got.some((m) => m.kind === 'session-pin-set' && m.requestId === 'unpin-s1'), 2000)
+  const unpinBroadcast = await waitFor(() => Array.isArray(lastPins())
+    && lastPins().length === 1 && lastPins()[0] === 'web-initial', 2000)
+  ws.send(JSON.stringify({ type: 'session-pin', sessionId: 'missing', pinned: true, requestId: 'missing-pin' }))
+  const missingPin = await waitFor(() => got.some((m) => m.requestId === 'missing-pin' && m.code === 'session/not-found'), 2000)
+  ws.send(JSON.stringify({ type: 'session-pin', sessionId: 's1', pinned: 'false', requestId: 'bad-pin' }))
+  const badPin = await waitFor(() => got.some((m) => m.requestId === 'bad-pin' && m.code === 'bad-request'), 2000)
+  interactionResults.push(['session pin capability, baseline, ack and broadcast',
+    pinnedBaseline && pinCapability && pinAck && pinBroadcast && unpinAck && unpinBroadcast && missingPin && badPin])
 
   ws.send(JSON.stringify({ type: 'subscribe', sessionId: 's2' }))
   await waitFor(() => got.some((m) => m.kind === 'subscribed' && m.sessionId === 's2'), 2000)

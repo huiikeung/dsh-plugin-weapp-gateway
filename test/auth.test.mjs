@@ -26,6 +26,12 @@ function waitForMessage(ws, kind) {
   })
 }
 
+// 本机挂着 Tailscale 节点时，网关会把 tailnet 地址（100.64.0.0/10）和局域网地址
+// 一起当作配对候选。断言只校验本次传入的 lanUrl，不把环境相关的 tailnet 候选写死。
+function lanCandidatesOnly(routes) {
+  return routes.filter((url) => !/^ws:\/\/100\.(?:6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(url))
+}
+
 // The server finishes its own close bookkeeping slightly after the client's
 // close event, so device counts are awaited by polling rather than assumed.
 async function waitForDeviceConnections(base, expected) {
@@ -485,6 +491,7 @@ function expectRejected(url, options = {}) {
     'session-cancel',
     'queue-control',
     'session-archive',
+    'session-pin-v1',
     'session-rename',
     'file-downloads',
     'file-references-v1',
@@ -778,7 +785,7 @@ function expectRejected(url, options = {}) {
   assert.equal('pairingCode' in relayAutoPayload.miniProgramRoute, false, 'the one-time code is shared only at the envelope level')
   assert.deepEqual(relayAutoPayload.routes.public, [],
     'without a verified public WSS endpoint the route table has no public family')
-  assert.deepEqual(relayAutoPayload.routes.lan, ['ws://192.168.1.20:3081/ws/mobile'])
+  assert.deepEqual(lanCandidatesOnly(relayAutoPayload.routes.lan), ['ws://192.168.1.20:3081/ws/mobile'])
   assert.equal(relayAutoPayload.routes.relay.nodeId, 'ecb2de50-7542-490b-af4f-aebfcb29c3c2',
     'auto pairing still advertises the relay so the phone can connect off-LAN')
 
@@ -795,7 +802,7 @@ function expectRejected(url, options = {}) {
   assert.equal(miniPayload.publicUrl, 'ws://192.168.1.20:3081/ws/mobile')
   assert.equal('miniProgramRoute' in miniPayload, false, 'the mini route keeps the relay in the route table instead of a relay-only payload')
   assert.deepEqual(miniPayload.routes.public, [], 'the mini route never advertises a public family')
-  assert.deepEqual(miniPayload.routes.lan, ['ws://192.168.1.20:3081/ws/mobile'],
+  assert.deepEqual(lanCandidatesOnly(miniPayload.routes.lan), ['ws://192.168.1.20:3081/ws/mobile'],
     'the mini route keeps LAN endpoints as the fallback family')
   assert.equal(miniPayload.routes.relay.relay, 'wss://relay.example.com')
   assert.equal(miniPayload.routes.relay.authMode, 'gateway')
