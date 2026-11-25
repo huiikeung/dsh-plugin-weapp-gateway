@@ -2,7 +2,7 @@
 
 ## 0.8.71（会话置顶协议对齐上游）
 
-版本发布状态：待发布。对齐上游 `dsh-plugin-mobile-gateway` 的会话置顶协议，补齐 fork 缺口的 `session-pin-v1`。
+版本发布状态：已发布。对齐上游 `dsh-plugin-mobile-gateway` 的会话置顶协议，补齐 fork 缺口的 `session-pin-v1`。
 
 ### 新增功能
 
