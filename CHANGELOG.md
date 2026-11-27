@@ -1,5 +1,16 @@
 # 版本记录
 
+## 0.8.72（插件设置字段级文案 + web 提供方列表）
+
+版本发布状态：已发布。补齐 fork 与上游在插件设置文案与 web 提供方发现上的差距。
+
+### 新增功能
+
+- `plugin-settings` 下发字段级文案：`schemaFieldLabels()` / `pickLocaleText()` 从 schemastery refs 树读取
+  `meta.description`（字符串或多语言对象均可），`role=secret` 字段跳过；单命名空间与全量视图都带 `labels`。
+- `web` 能力新增 `listProviders` 转发（对齐桌面端 `ctx.remote.web.listProviders`），手机设置页动态列出
+  已注册的搜索/获取提供方。
+
 ## 0.8.71（会话置顶协议对齐上游）
 
 版本发布状态：已发布。对齐上游 `dsh-plugin-mobile-gateway` 的会话置顶协议，补齐 fork 缺口的 `session-pin-v1`。

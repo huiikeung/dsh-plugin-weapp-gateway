@@ -6,6 +6,11 @@
 
 `dsh-plugin-weapp-gateway` · DeepSeek Harness 移动客户端连接插件
 
+### v0.8.72 · 插件设置字段级文案 + web 提供方列表转发
+
+- 新增 `schemaFieldLabels()` / `pickLocaleText()`：从 schemastery 的 refs 树读取 `meta.description`（支持字符串或多语言对象），`role=secret` 的字段跳过；`plugin-settings` 的单命名空间视图与全量视图都带上 `labels`，手机端可优先用主机文案渲染字段标签，不再只显示原始 key。
+- 新增 `web` 能力 `listProviders` 转发（对齐 DSH 桌面端 `ctx.remote.web.listProviders`）：手机设置页据此动态列出已注册的搜索/获取提供方，不再硬编码 id。
+- 改动集中在 `lib/plugin-management.mjs`、`lib/dsh-host-adapter.mjs`、`lib/index.mjs`；全量测试通过。
 ### v0.8.71 · 会话置顶协议对齐上游（session-pin-v1）
 
 - 对齐上游 `dsh-plugin-mobile-gateway` 的会话置顶协议：新增 `session-pin` 请求（`sessionId`、`pinned`、`requestId?`），走 Host 与 WebUI 共用的 `workspace.pinSession` / `workspace.unpinSession`，成功回 `session-pin-set`（不带集合）。
